@@ -799,50 +799,50 @@ void createSymlink(node* currentFolder, char* target, char* linkName) {
 }
 
 // Compression (using zlib)
-void compressDirectory(node* folder, const char* filename) {
-    if (!folder) return;
+// void compressDirectory(node* folder, const char* filename) {
+//     if (!folder) return;
 
-    FILE* file = fopen(filename, "wb");
-    if (!file) {
-        printf("Error: Unable to create compressed file.\n");
-        return;
-    }
+//     FILE* file = fopen(filename, "wb");
+//     if (!file) {
+//         printf("Error: Unable to create compressed file.\n");
+//         return;
+//     }
 
-    gzFile gzfile = gzdopen(fileno(file), "wb");
-    if (!gzfile) {
-        fclose(file);
-        printf("Error: Unable to open compressed stream.\n");
-        return;
-    }
+//     gzFile gzfile = gzdopen(fileno(file), "wb");
+//     if (!gzfile) {
+//         fclose(file);
+//         printf("Error: Unable to open compressed stream.\n");
+//         return;
+//     }
 
-    saveDirectory(folder, gzfile); // Save directory structure into compressed stream
-    gzclose(gzfile);
+//     saveDirectory(folder, gzfile); // Save directory structure into compressed stream
+//     gzclose(gzfile);
 
-    printf("Directory compressed to %s.\n", filename);
-}
+//     printf("Directory compressed to %s.\n", filename);
+// }
 
 // Decompression (using zlib)
-node* decompressDirectory(const char* filename) {
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        printf("Error: Unable to open compressed file.\n");
-        return NULL;
-    }
+// node* decompressDirectory(const char* filename) {
+//     FILE* file = fopen(filename, "rb");
+//     if (!file) {
+//         printf("Error: Unable to open compressed file.\n");
+//         return NULL;
+//     }
 
-    gzFile gzfile = gzdopen(fileno(file), "rb");
-    if (!gzfile) {
-        fclose(file);
-        printf("Error: Unable to open compressed stream.\n");
-        return NULL;
-    }
+//     gzFile gzfile = gzdopen(fileno(file), "rb");
+//     if (!gzfile) {
+//         fclose(file);
+//         printf("Error: Unable to open compressed stream.\n");
+//         return NULL;
+//     }
 
-    node* folder = malloc(sizeof(node));
-    folder->child = loadDirectory(gzfile, folder); // Load directory structure from compressed stream
-    gzclose(gzfile);
+//     node* folder = malloc(sizeof(node));
+//     folder->child = loadDirectory(gzfile, folder); // Load directory structure from compressed stream
+//     gzclose(gzfile);
 
-    printf("Directory decompressed from %s.\n", filename);
-    return folder;
-}
+//     printf("Directory decompressed from %s.\n", filename);
+//     return folder;
+// }
 
 int main() {
 
@@ -949,19 +949,19 @@ int main() {
             }
         } else if (strncmp(command, "compress", 8) == 0) {
             char* filename = strtok(command + 9, " ");
-            if (filename) {
-                compressDirectory(root, filename);
-            }
+            // if (filename) {
+            //     compressDirectory(root, filename);
+            // }
         } else if (strncmp(command, "decompress", 10) == 0) {
             char* filename = strtok(command + 11, " ");
-            if (filename) {
-                node* decompressedRoot = decompressDirectory(filename);
-                if (decompressedRoot) {
-                    freeNode(root);
-                    root = decompressedRoot;
-                    currentFolder = root;
-                }
-            }
+            // if (filename) {
+            //     node* decompressedRoot = decompressDirectory(filename);
+            //     if (decompressedRoot) {
+            //         freeNode(root);
+            //         root = decompressedRoot;
+            //         currentFolder = root;
+            //     }
+            // }
         } else if (strncmp(command, "rename", 6) == 0) {
             char* oldName = strtok(command + 7, " ");
             char* newName = strtok(NULL, " ");
