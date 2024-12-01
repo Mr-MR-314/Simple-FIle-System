@@ -61,10 +61,10 @@ void mov(node* currentFolder, char* command);
 int countFiles(node* folder);
 
 // Function to save the directory structure to a file or compressed file
-void saveDirectory(node* folder, void* file);
+void saveDirectory(node* folder, FILE* file);
 
 // Function to load the directory structure from a file or compressed file
-node* loadDirectory(void* file, node* parent);
+node* loadDirectory(FILE* file, node* parent);
 
 // Function to merge two directories, resolving conflicts interactively
 void mergeDirectories(node* destFolder, node* srcFolder);
@@ -118,28 +118,15 @@ int countFiles(node* folder) {
 
 // Week 2: Save Directory Structure
 // Function to save the directory to either a regular file or compressed file
-void saveDirectory(node* folder, void* file) {
+void saveDirectory(node* folder, FILE* file) {
     if (!folder) return;
 
-    // Check if the file is a gzFile (compressed file)
-    gzFile gz = (gzFile)file;
-    if (gz) {
-        // If it's a gzFile (compressed), use gz functions
-        gzprintf(gz, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
-    } else {
-        // Otherwise, it's a regular FILE*, use FILE* functions
-        FILE* regularFile = (FILE*)file;
-        fprintf(regularFile, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
-    }
+    // Save folder or file details
+    fprintf(file, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
 
-    // Save content for files (if available)
-    if (folder->content) {
-        if (gz) {
-            gzprintf(gz, "CONTENT:%s\n", folder->content);
-        } else {
-            FILE* regularFile = (FILE*)file;
-            fprintf(regularFile, "CONTENT:%s\n", folder->content);
-        }
+    // Save file content if it's a file
+    if (folder->type == File && folder->content) {
+        fprintf(file, "CONTENT:%s\n", folder->content);
     }
 
     // Recursively save child nodes
@@ -149,98 +136,51 @@ void saveDirectory(node* folder, void* file) {
         currentNode = currentNode->next;
     }
 
-    // Mark the end of the current directory's children
-    if (gz) {
-        gzprintf(gz, "END\n");
-    } else {
-        FILE* regularFile = (FILE*)file;
-        fprintf(regularFile, "END\n");
-    }
+    // Mark the end of this folder's children
+    fprintf(file, "END\n");
 }
 
 // Week 2: Load Directory Structure
 // Function to load the directory from either a regular file or compressed file
-node* loadDirectory(void* file, node* parent) {
+node* loadDirectory(FILE* file, node* parent) {
     char line[1024];
 
-    // Check if the file is a gzFile (compressed file)
-    gzFile gz = (gzFile)file;
-    if (gz) {
-        // If it's a gzFile, use zlib's gz functions
-        while (gzgets(gz, line, sizeof(line))) {
-            if (strncmp(line, "END", 3) == 0) break;
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, "END", 3) == 0) break;
 
-            node* newNode = (node*)malloc(sizeof(node));
-            newNode->parent = parent;
-            newNode->child = NULL;
-            newNode->next = NULL;
-            newNode->previous = NULL;
-            newNode->symlinkTarget = NULL;
+        node* newNode = (node*)malloc(sizeof(node));
+        newNode->parent = parent;
+        newNode->child = NULL;
+        newNode->next = NULL;
+        newNode->previous = NULL;
+        newNode->symlinkTarget = NULL;
 
-            // Parse the directory info
-            sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
+        // Parse node details
+        sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
 
-            // Load file content if available
-            if (gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
-                newNode->content = strdup(line + 8);
-                newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
-            } else {
-                newNode->content = NULL;
-            }
-
-            // Recursively load child nodes (if any)
-            newNode->child = loadDirectory(file, newNode);
-
-            // Add the new node to the parent's children list
-            if (parent->child == NULL) {
-                parent->child = newNode;
-            } else {
-                node* last = parent->child;
-                while (last->next) last = last->next;
-                last->next = newNode;
-                newNode->previous = last;
-            }
+        // Read content if available
+        if (newNode->type == File && fgets(line, sizeof(line), file) && strncmp(line, "CONTENT:", 8) == 0) {
+            newNode->content = strdup(line + 8);
+            newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
+        } else {
+            newNode->content = NULL;
         }
-    } else {
-        // If it's a regular file, use FILE* functions
-        FILE* regularFile = (FILE*)file;
-        while (fgets(line, sizeof(line), regularFile)) {
-            if (strncmp(line, "END", 3) == 0) break;
 
-            node* newNode = (node*)malloc(sizeof(node));
-            newNode->parent = parent;
-            newNode->child = NULL;
-            newNode->next = NULL;
-            newNode->previous = NULL;
-            newNode->symlinkTarget = NULL;
+        // Recursively load children
+        newNode->child = loadDirectory(file, newNode);
 
-            // Parse the directory info
-            sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
-
-            // Load file content if available
-            if (fgets(line, sizeof(line), regularFile) && strncmp(line, "CONTENT:", 8) == 0) {
-                newNode->content = strdup(line + 8);
-                newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
-            } else {
-                newNode->content = NULL;
-            }
-
-            // Recursively load child nodes (if any)
-            newNode->child = loadDirectory(file, newNode);
-
-            // Add the new node to the parent's children list
-            if (parent->child == NULL) {
-                parent->child = newNode;
-            } else {
-                node* last = parent->child;
-                while (last->next) last = last->next;
-                last->next = newNode;
-                newNode->previous = last;
-            }
+        // Add to parent's children
+        if (parent->child == NULL) {
+            parent->child = newNode;
+        } else {
+            node* last = parent->child;
+            while (last->next) last = last->next;
+            last->next = newNode;
+            newNode->previous = last;
         }
     }
 
-    return parent->child;
+    return parent ? parent->child : NULL;
 }
 
 // Week 3: Rename Node
@@ -970,7 +910,7 @@ int main() {
             if (filename) {
                 FILE* file = fopen(filename, "r");
                 if (file) {
-                    freeNode(root);
+                    freeNode(root); // Free the current directory tree
                     root = (node*)malloc(sizeof(node));
                     root->type = Folder;
                     root->name = strdup("/");
