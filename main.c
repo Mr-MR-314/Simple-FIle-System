@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <time.h>
 #include <zlib.h> // For compression and decompression
@@ -22,7 +23,7 @@ typedef struct node {
 } node;
 
 // Function to create a new folder in the current directory
-void mkdir(node* currentFolder, char* command);
+void make_dir(node* currentFolder, char* command);
 
 // Function to create a new file in the current directory
 void touch(node* currentFolder, char* command);
@@ -244,7 +245,7 @@ node* getNodeTypeless(node *currentFolder, char* name) {
     } else return NULL;
 }
 
-void mkdir(node *currentFolder, char *command) {
+void make_dir(node *currentFolder, char *command) {
     if (strtok(command, " ") != NULL) {
         char* folderName = strtok(NULL, " ");
         if (folderName != NULL) {
@@ -256,7 +257,6 @@ void mkdir(node *currentFolder, char *command) {
                 if (currentFolder->child == NULL) {
                     currentFolder->child = newFolder;
                     newFolder->previous = NULL;
-                    newFolder->parent = currentFolder;
                 } else {
 
                     node *currentNode = currentFolder->child;
@@ -266,7 +266,6 @@ void mkdir(node *currentFolder, char *command) {
                     }
                     currentNode->next = newFolder;
                     newFolder->previous = currentNode;
-                    newFolder->parent = NULL;
                 }
 
                 char* newFolderName = (char*) malloc(sizeof(char)*(strlen(folderName)+1));
@@ -278,13 +277,23 @@ void mkdir(node *currentFolder, char *command) {
                 newFolder->size = 0;
                 newFolder->date = time(NULL);
                 newFolder->content = NULL;
+                newFolder->parent = currentFolder;
                 newFolder->next = NULL;
                 newFolder->child = NULL;
 
                 printf("Folder '%s' added\n", newFolder->name);
-            } else {
-                fprintf(stderr, "'%s' is already exist in current directory!\n",  folderName);
-            }
+
+                // Create the real folder
+                char path[1024];
+                snprintf(path, sizeof(path), "./%s/%s", currentFolder->name, folderName);
+                if (mkdir(path, 0755) == 0) {
+                    printf("Folder '%s' created in the real filesystem.\n", path);
+                } else {
+                    perror("Error creating folder in the real filesystem");
+                }
+                } else {
+                    fprintf(stderr, "'%s' is already exist in current directory!\n",  folderName);
+                }
         }
     }
 }
@@ -329,7 +338,6 @@ void touch(node *currentFolder, char *command) {
                 if (currentFolder->child == NULL) {
                     currentFolder->child = newFile;
                     newFile->previous = NULL;
-                    newFile->parent = currentFolder;
                 } else {
 
                     node *currentNode = currentFolder->child;
@@ -339,7 +347,6 @@ void touch(node *currentFolder, char *command) {
                     }
                     currentNode->next = newFile;
                     newFile->previous = currentNode;
-                    newFile->parent = NULL;
                 }
 
                 char* newFileName = (char*) malloc(sizeof(char)*(strlen(fileName)+1));
@@ -351,10 +358,22 @@ void touch(node *currentFolder, char *command) {
                 newFile->size = 0;
                 newFile->date = time(NULL);
                 newFile->content = NULL;
+                newFile->parent = currentFolder;
                 newFile->next = NULL;
                 newFile->child = NULL;
 
                 printf("File '%s' added\n", newFile->name);
+
+                // Create the real file
+                char path[1024];
+                snprintf(path, sizeof(path), "./%s/%s", currentFolder->name, fileName);
+                FILE* file = fopen(path, "w");
+                if (file) {
+                    fclose(file);
+                    printf("File '%s' created in the real filesystem.\n", path);
+                } else {
+                    printf("Error: Could not create file '%s'.\n", path);
+                }
             } else {
                 fprintf(stderr, "'%s' is already exist in current directory!\n", fileName);
             }
@@ -453,27 +472,43 @@ void lsrecursive(node *currentFolder, int indentCount) {
     }
 }
 
-void edit(node *currentFolder, char *command) {
-
+void edit(node* currentFolder, char* command) {
     if (strtok(command, " ") != NULL) {
-        char *fileName = strtok(NULL, " ");
+        char* fileName = strtok(NULL, " ");
         if (fileName != NULL) {
-            node * editingNode = getNode(currentFolder, fileName, File);
-            if (editingNode != NULL) {
-                printf("%s\n", "Please enter some text to overwrite the file content:");
-                if (editingNode->content != NULL){
+            node* editingNode = getNode(currentFolder, fileName, File);
+            if (editingNode) {
+                printf("Enter new content for '%s':\n", fileName);
+                char* content = getString();
+
+                // Update memory
+                if (editingNode->content) {
                     free(editingNode->content);
                 }
-                char* content = getString();
-                if (content != NULL) {
-                    editingNode->content = content;
-                    editingNode->size = strlen(editingNode->content);
-                    editingNode->date = time(NULL);
+                editingNode->content = strdup(content);
+                editingNode->size = strlen(content);
+                editingNode->date = time(NULL);
+
+                // Write to the real file
+                char path[1024];
+                snprintf(path, sizeof(path), "%s/%s", currentFolder->name, fileName);
+                FILE* file = fopen(path, "w");
+                if (file) {
+                    fprintf(file, "%s", content);
+                    fclose(file);
+                    printf("Content written to file '%s' in the real filesystem.\n", path);
+                } else {
+                    printf("Error: Could not write to file '%s'.\n", path);
                 }
+
+                free(content);
+            } else {
+                printf("File '%s' not found.\n", fileName);
             }
         }
     }
 }
+
 
 void pwd(char *path) {
     if (strlen(path) != 1){
@@ -573,31 +608,45 @@ void removeNode(node *removingNode) {
     }
 }
 
-void rm(node *currentFolder, char *command) {
-
+void rm(node* currentFolder, char* command) {
     if (strtok(command, " ") != NULL) {
-        char *nodeName = strtok(NULL, " ");
+        char* nodeName = strtok(NULL, " ");
         if (nodeName != NULL) {
-            node *removingNode = getNodeTypeless(currentFolder, nodeName);
-
-            if (removingNode != NULL) {
-
-                printf("Do you really want to remove %s and all of its content? (y/n)\n", removingNode->name);
-
-                char *answer = getString();
-                if (strcmp(answer, "y") == 0 ) {
+            node* removingNode = getNodeTypeless(currentFolder, nodeName);
+            if (removingNode) {
+                printf("Do you really want to remove '%s' and its content? (y/n)\n", nodeName);
+                char* answer = getString();
+                if (strcmp(answer, "y") == 0) {
+                    // Remove from memory
                     currentFolder->numberOfItems--;
                     removeNode(removingNode);
-                    printf("%s and its all content is removed!\n", removingNode->name);
                     freeNode(removingNode);
+
+                    // Remove from real filesystem
+                    char path[1024];
+                    snprintf(path, sizeof(path), "%s/%s", currentFolder->name, nodeName);
+                    if (removingNode->type == Folder) {
+                        if (rmdir(path) == 0) {
+                            printf("Folder '%s' removed from the real filesystem.\n", path);
+                        } else {
+                            perror("Error removing folder from the real filesystem");
+                        }
+                    } else if (removingNode->type == File) {
+                        if (remove(path) == 0) {
+                            printf("File '%s' removed from the real filesystem.\n", path);
+                        } else {
+                            perror("Error removing file from the real filesystem");
+                        }
+                    }
                 }
                 free(answer);
             } else {
-                fprintf(stderr, "'%s' is not exist in current directory!\n",  nodeName);
+                printf("Node '%s' not found.\n", nodeName);
             }
         }
     }
 }
+
 
 void moveNode(node *movingNode, node *destinationFolder) {
 
@@ -872,7 +921,7 @@ int main() {
         char *command = getString();
 
         if (strncmp(command, "mkdir", 5) == 0) {
-            mkdir(currentFolder, command);
+            make_dir(currentFolder, command);
         } else if (strncmp(command, "touch", 5) == 0) {
             touch(currentFolder, command);
         } else if (strcmp(command, "ls") == 0) {
