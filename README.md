@@ -40,25 +40,25 @@ You will enter a ⚖️ command-line interface where you can execute various com
 ## **Available Commands**
 
 | **Command**               | **Description**                                                              | **Example Usage**                                                 |               |
-| ------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------- |
-| `mkdir <name>`            | Creates a new 📂 folder in the current directory.                               | `mkdir documents`                                                 |               |
-| `touch <name>`            | Creates a new 📁 file in the current directory.                                 | `touch notes.txt`                                                 |               |
-| `ls`                      | Lists all 📂 files and folders in the current directory.                        | `ls`                                                              |               |
-| `lsrecursive`             | Recursively lists all files and folders starting from the current directory. | `lsrecursive`                                                     |               |
-| `cd <folder>`             | Changes the current 🏢 directory to the specified folder.                       | `cd documents`                                                    |               |
-| `cdup`                    | Moves to the 🔼 parent directory of the current folder.                         | `cdup`                                                            |               |
-| `rm <name>`               | Deletes the specified 🗑 file or folder from the current directory.             | `rm notes.txt`                                                    |               |
-| `mov <src> <dest>`        | Moves a file or folder to another directory.                                 | `mov notes.txt projects`                                          |               |
-| `countFiles`              | Counts the total number of 📁 files in the entire directory tree.               | `countFiles`                                                      |               |
-| `save <filename>`         | 📝 Saves the current directory structure to a file.                             | `save filesystem.txt`                                             |               |
-| `load <filename>`         | Loads a directory structure from a previously saved file.                    | `load filesystem.txt`                                             |               |
-| `merge <src> <dest>`      | 🌐 Merges two directories, resolving any conflicts interactively.               | `merge src_folder dest_folder`                                    |               |
-| `symlink <target> <link>` | Creates a symbolic 🔗 link to an existing file or folder.                       | `symlink notes.txt shortcut`                                      |               |
+| ------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `mkdir <name>`            | Creates a new 📂 folder in the current directory.                               | `mkdir documents`                                                 |
+| `touch <name>`            | Creates a new 📁 file in the current directory.                                 | `touch notes.txt`                                                 |
+| `ls`                      | Lists all 📂 files and folders in the current directory.                        | `ls`                                                              |  
+| `lsrecursive`             | Recursively lists all files and folders starting from the current directory. | `lsrecursive`                                                     |
+| `cd <folder>`             | Changes the current 🏢 directory to the specified folder.                       | `cd documents`                                                    |
+| `cdup`                    | Moves to the 🔼 parent directory of the current folder.                         | `cdup`                                                            |
+| `rm <name>`               | Deletes the specified 🗑 file or folder from the current directory.             | `rm notes.txt`                                                    |
+| `mov <src> <dest>`        | Moves a file or folder to another directory.                                 | `mov notes.txt projects`                                          |
+| `countFiles`              | Counts the total number of 📁 files in the entire directory tree.               | `countFiles`                                                      |
+| `save <filename>`         | 📝 Saves the current directory structure to a file.                             | `save filesystem.txt`                                             |
+| `load <filename>`         | Loads a directory structure from a previously saved file.                    | `load filesystem.txt`                                             |   
+| `merge <src> <dest>`      | 🌐 Merges two directories, resolving any conflicts interactively.               | `merge src_folder dest_folder`                                    | 
+| `symlink <target> <link>` | Creates a symbolic 🔗 link to an existing file or folder.                       | `symlink notes.txt shortcut`                                      |
 | `sortBy <name \| date>`                                                                      | Sorts files and folders in the current directory by name or date. | `sortBy name` |
-| `compress <filename>`     | 🔐 Compresses the entire directory structure into a file.                       | `compress archive.gz`                                             |               |
-| `decompress <filename>`   | 🔋 Decompresses a file and restores the directory structure.                    | `decompress archive.gz`                                           |               |
-| `rename <old> <new>`      | Renames a file or folder in the current directory.                           | `rename oldname.txt newname.txt`                                  |               |
-| `fullpath`                | Displays the full 🔍 path of the current directory.                             | `fullpath`                                                        |               |
+| `compress <filename>`     | 🔐 Compresses the entire directory structure into a file.                       | `compress archive.gz`                                             | 
+| `decompress <filename>`   | 🔋 Decompresses a file and restores the directory structure.                    | `decompress archive.gz`                                           | 
+| `rename <old> <new>`      | Renames a file or folder in the current directory.                           | `rename oldname.txt newname.txt`                                  |  
+| `fullpath`                | Displays the full 🔍 path of the current directory.                             | `fullpath`                                                        |  
 
 ---
 
