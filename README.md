@@ -39,7 +39,7 @@ You will enter a ⚖️ command-line interface where you can execute various com
 
 ## **Available Commands**
 
-| **Command**               | **Description**                                                              | **Example Usage**                                                 |               |
+| **Command**               | **Description**                                                              | **Example Usage**                                                 |
 | ------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `mkdir <name>`            | Creates a new 📂 folder in the current directory.                               | `mkdir documents`                                                 |
 | `touch <name>`            | Creates a new 📁 file in the current directory.                                 | `touch notes.txt`                                                 |
