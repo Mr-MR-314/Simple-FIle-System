@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <time.h>
 #include <zlib.h> // For compression and decompression
@@ -22,7 +23,7 @@ typedef struct node {
 } node;
 
 // Function to create a new folder in the current directory
-void mkdir(node* currentFolder, char* command);
+void make_dir(node* currentFolder, char* command);
 
 // Function to create a new file in the current directory
 void touch(node* currentFolder, char* command);
@@ -61,10 +62,10 @@ void mov(node* currentFolder, char* command);
 int countFiles(node* folder);
 
 // Function to save the directory structure to a file or compressed file
-void saveDirectory(node* folder, void* file);
+void saveDirectory(node* folder, FILE* file);
 
 // Function to load the directory structure from a file or compressed file
-node* loadDirectory(void* file, node* parent);
+node* loadDirectory(FILE* file, node* parent);
 
 // Function to merge two directories, resolving conflicts interactively
 void mergeDirectories(node* destFolder, node* srcFolder);
@@ -118,28 +119,15 @@ int countFiles(node* folder) {
 
 // Week 2: Save Directory Structure
 // Function to save the directory to either a regular file or compressed file
-void saveDirectory(node* folder, void* file) {
+void saveDirectory(node* folder, FILE* file) {
     if (!folder) return;
 
-    // Check if the file is a gzFile (compressed file)
-    gzFile gz = (gzFile)file;
-    if (gz) {
-        // If it's a gzFile (compressed), use gz functions
-        gzprintf(gz, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
-    } else {
-        // Otherwise, it's a regular FILE*, use FILE* functions
-        FILE* regularFile = (FILE*)file;
-        fprintf(regularFile, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
-    }
+    // Save folder or file details
+    fprintf(file, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
 
-    // Save content for files (if available)
-    if (folder->content) {
-        if (gz) {
-            gzprintf(gz, "CONTENT:%s\n", folder->content);
-        } else {
-            FILE* regularFile = (FILE*)file;
-            fprintf(regularFile, "CONTENT:%s\n", folder->content);
-        }
+    // Save file content if it's a file
+    if (folder->type == File && folder->content) {
+        fprintf(file, "CONTENT:%s\n", folder->content);
     }
 
     // Recursively save child nodes
@@ -149,98 +137,51 @@ void saveDirectory(node* folder, void* file) {
         currentNode = currentNode->next;
     }
 
-    // Mark the end of the current directory's children
-    if (gz) {
-        gzprintf(gz, "END\n");
-    } else {
-        FILE* regularFile = (FILE*)file;
-        fprintf(regularFile, "END\n");
-    }
+    // Mark the end of this folder's children
+    fprintf(file, "END\n");
 }
 
 // Week 2: Load Directory Structure
 // Function to load the directory from either a regular file or compressed file
-node* loadDirectory(void* file, node* parent) {
+node* loadDirectory(FILE* file, node* parent) {
     char line[1024];
 
-    // Check if the file is a gzFile (compressed file)
-    gzFile gz = (gzFile)file;
-    if (gz) {
-        // If it's a gzFile, use zlib's gz functions
-        while (gzgets(gz, line, sizeof(line))) {
-            if (strncmp(line, "END", 3) == 0) break;
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, "END", 3) == 0) break;
 
-            node* newNode = (node*)malloc(sizeof(node));
-            newNode->parent = parent;
-            newNode->child = NULL;
-            newNode->next = NULL;
-            newNode->previous = NULL;
-            newNode->symlinkTarget = NULL;
+        node* newNode = (node*)malloc(sizeof(node));
+        newNode->parent = parent;
+        newNode->child = NULL;
+        newNode->next = NULL;
+        newNode->previous = NULL;
+        newNode->symlinkTarget = NULL;
 
-            // Parse the directory info
-            sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
+        // Parse node details
+        sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
 
-            // Load file content if available
-            if (gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
-                newNode->content = strdup(line + 8);
-                newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
-            } else {
-                newNode->content = NULL;
-            }
-
-            // Recursively load child nodes (if any)
-            newNode->child = loadDirectory(file, newNode);
-
-            // Add the new node to the parent's children list
-            if (parent->child == NULL) {
-                parent->child = newNode;
-            } else {
-                node* last = parent->child;
-                while (last->next) last = last->next;
-                last->next = newNode;
-                newNode->previous = last;
-            }
+        // Read content if available
+        if (newNode->type == File && fgets(line, sizeof(line), file) && strncmp(line, "CONTENT:", 8) == 0) {
+            newNode->content = strdup(line + 8);
+            newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
+        } else {
+            newNode->content = NULL;
         }
-    } else {
-        // If it's a regular file, use FILE* functions
-        FILE* regularFile = (FILE*)file;
-        while (fgets(line, sizeof(line), regularFile)) {
-            if (strncmp(line, "END", 3) == 0) break;
 
-            node* newNode = (node*)malloc(sizeof(node));
-            newNode->parent = parent;
-            newNode->child = NULL;
-            newNode->next = NULL;
-            newNode->previous = NULL;
-            newNode->symlinkTarget = NULL;
+        // Recursively load children
+        newNode->child = loadDirectory(file, newNode);
 
-            // Parse the directory info
-            sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
-
-            // Load file content if available
-            if (fgets(line, sizeof(line), regularFile) && strncmp(line, "CONTENT:", 8) == 0) {
-                newNode->content = strdup(line + 8);
-                newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
-            } else {
-                newNode->content = NULL;
-            }
-
-            // Recursively load child nodes (if any)
-            newNode->child = loadDirectory(file, newNode);
-
-            // Add the new node to the parent's children list
-            if (parent->child == NULL) {
-                parent->child = newNode;
-            } else {
-                node* last = parent->child;
-                while (last->next) last = last->next;
-                last->next = newNode;
-                newNode->previous = last;
-            }
+        // Add to parent's children
+        if (parent->child == NULL) {
+            parent->child = newNode;
+        } else {
+            node* last = parent->child;
+            while (last->next) last = last->next;
+            last->next = newNode;
+            newNode->previous = last;
         }
     }
 
-    return parent->child;
+    return parent ? parent->child : NULL;
 }
 
 // Week 3: Rename Node
@@ -304,7 +245,7 @@ node* getNodeTypeless(node *currentFolder, char* name) {
     } else return NULL;
 }
 
-void mkdir(node *currentFolder, char *command) {
+void make_dir(node *currentFolder, char *command) {
     if (strtok(command, " ") != NULL) {
         char* folderName = strtok(NULL, " ");
         if (folderName != NULL) {
@@ -316,7 +257,6 @@ void mkdir(node *currentFolder, char *command) {
                 if (currentFolder->child == NULL) {
                     currentFolder->child = newFolder;
                     newFolder->previous = NULL;
-                    newFolder->parent = currentFolder;
                 } else {
 
                     node *currentNode = currentFolder->child;
@@ -326,7 +266,6 @@ void mkdir(node *currentFolder, char *command) {
                     }
                     currentNode->next = newFolder;
                     newFolder->previous = currentNode;
-                    newFolder->parent = NULL;
                 }
 
                 char* newFolderName = (char*) malloc(sizeof(char)*(strlen(folderName)+1));
@@ -338,13 +277,23 @@ void mkdir(node *currentFolder, char *command) {
                 newFolder->size = 0;
                 newFolder->date = time(NULL);
                 newFolder->content = NULL;
+                newFolder->parent = currentFolder;
                 newFolder->next = NULL;
                 newFolder->child = NULL;
 
                 printf("Folder '%s' added\n", newFolder->name);
-            } else {
-                fprintf(stderr, "'%s' is already exist in current directory!\n",  folderName);
-            }
+
+                // Create the real folder
+                char path[1024];
+                snprintf(path, sizeof(path), "./%s/%s", currentFolder->name, folderName);
+                if (mkdir(path, 0755) == 0) {
+                    printf("Folder '%s' created in the real filesystem.\n", path);
+                } else {
+                    perror("Error creating folder in the real filesystem");
+                }
+                } else {
+                    fprintf(stderr, "'%s' is already exist in current directory!\n",  folderName);
+                }
         }
     }
 }
@@ -389,7 +338,6 @@ void touch(node *currentFolder, char *command) {
                 if (currentFolder->child == NULL) {
                     currentFolder->child = newFile;
                     newFile->previous = NULL;
-                    newFile->parent = currentFolder;
                 } else {
 
                     node *currentNode = currentFolder->child;
@@ -399,7 +347,6 @@ void touch(node *currentFolder, char *command) {
                     }
                     currentNode->next = newFile;
                     newFile->previous = currentNode;
-                    newFile->parent = NULL;
                 }
 
                 char* newFileName = (char*) malloc(sizeof(char)*(strlen(fileName)+1));
@@ -411,10 +358,22 @@ void touch(node *currentFolder, char *command) {
                 newFile->size = 0;
                 newFile->date = time(NULL);
                 newFile->content = NULL;
+                newFile->parent = currentFolder;
                 newFile->next = NULL;
                 newFile->child = NULL;
 
                 printf("File '%s' added\n", newFile->name);
+
+                // Create the real file
+                char path[1024];
+                snprintf(path, sizeof(path), "./%s/%s", currentFolder->name, fileName);
+                FILE* file = fopen(path, "w");
+                if (file) {
+                    fclose(file);
+                    printf("File '%s' created in the real filesystem.\n", path);
+                } else {
+                    printf("Error: Could not create file '%s'.\n", path);
+                }
             } else {
                 fprintf(stderr, "'%s' is already exist in current directory!\n", fileName);
             }
@@ -513,27 +472,43 @@ void lsrecursive(node *currentFolder, int indentCount) {
     }
 }
 
-void edit(node *currentFolder, char *command) {
-
+void edit(node* currentFolder, char* command) {
     if (strtok(command, " ") != NULL) {
-        char *fileName = strtok(NULL, " ");
+        char* fileName = strtok(NULL, " ");
         if (fileName != NULL) {
-            node * editingNode = getNode(currentFolder, fileName, File);
-            if (editingNode != NULL) {
-                printf("%s\n", "Please enter some text to overwrite the file content:");
-                if (editingNode->content != NULL){
+            node* editingNode = getNode(currentFolder, fileName, File);
+            if (editingNode) {
+                printf("Enter new content for '%s':\n", fileName);
+                char* content = getString();
+
+                // Update memory
+                if (editingNode->content) {
                     free(editingNode->content);
                 }
-                char* content = getString();
-                if (content != NULL) {
-                    editingNode->content = content;
-                    editingNode->size = strlen(editingNode->content);
-                    editingNode->date = time(NULL);
+                editingNode->content = strdup(content);
+                editingNode->size = strlen(content);
+                editingNode->date = time(NULL);
+
+                // Write to the real file
+                char path[1024];
+                snprintf(path, sizeof(path), "%s/%s", currentFolder->name, fileName);
+                FILE* file = fopen(path, "w");
+                if (file) {
+                    fprintf(file, "%s", content);
+                    fclose(file);
+                    printf("Content written to file '%s' in the real filesystem.\n", path);
+                } else {
+                    printf("Error: Could not write to file '%s'.\n", path);
                 }
+
+                free(content);
+            } else {
+                printf("File '%s' not found.\n", fileName);
             }
         }
     }
 }
+
 
 void pwd(char *path) {
     if (strlen(path) != 1){
@@ -633,31 +608,45 @@ void removeNode(node *removingNode) {
     }
 }
 
-void rm(node *currentFolder, char *command) {
-
+void rm(node* currentFolder, char* command) {
     if (strtok(command, " ") != NULL) {
-        char *nodeName = strtok(NULL, " ");
+        char* nodeName = strtok(NULL, " ");
         if (nodeName != NULL) {
-            node *removingNode = getNodeTypeless(currentFolder, nodeName);
-
-            if (removingNode != NULL) {
-
-                printf("Do you really want to remove %s and all of its content? (y/n)\n", removingNode->name);
-
-                char *answer = getString();
-                if (strcmp(answer, "y") == 0 ) {
+            node* removingNode = getNodeTypeless(currentFolder, nodeName);
+            if (removingNode) {
+                printf("Do you really want to remove '%s' and its content? (y/n)\n", nodeName);
+                char* answer = getString();
+                if (strcmp(answer, "y") == 0) {
+                    // Remove from memory
                     currentFolder->numberOfItems--;
                     removeNode(removingNode);
-                    printf("%s and its all content is removed!\n", removingNode->name);
                     freeNode(removingNode);
+
+                    // Remove from real filesystem
+                    char path[1024];
+                    snprintf(path, sizeof(path), "%s/%s", currentFolder->name, nodeName);
+                    if (removingNode->type == Folder) {
+                        if (rmdir(path) == 0) {
+                            printf("Folder '%s' removed from the real filesystem.\n", path);
+                        } else {
+                            perror("Error removing folder from the real filesystem");
+                        }
+                    } else if (removingNode->type == File) {
+                        if (remove(path) == 0) {
+                            printf("File '%s' removed from the real filesystem.\n", path);
+                        } else {
+                            perror("Error removing file from the real filesystem");
+                        }
+                    }
                 }
                 free(answer);
             } else {
-                fprintf(stderr, "'%s' is not exist in current directory!\n",  nodeName);
+                printf("Node '%s' not found.\n", nodeName);
             }
         }
     }
 }
+
 
 void moveNode(node *movingNode, node *destinationFolder) {
 
@@ -859,50 +848,50 @@ void createSymlink(node* currentFolder, char* target, char* linkName) {
 }
 
 // Compression (using zlib)
-void compressDirectory(node* folder, const char* filename) {
-    if (!folder) return;
+// void compressDirectory(node* folder, const char* filename) {
+//     if (!folder) return;
 
-    FILE* file = fopen(filename, "wb");
-    if (!file) {
-        printf("Error: Unable to create compressed file.\n");
-        return;
-    }
+//     FILE* file = fopen(filename, "wb");
+//     if (!file) {
+//         printf("Error: Unable to create compressed file.\n");
+//         return;
+//     }
 
-    gzFile gzfile = gzdopen(fileno(file), "wb");
-    if (!gzfile) {
-        fclose(file);
-        printf("Error: Unable to open compressed stream.\n");
-        return;
-    }
+//     gzFile gzfile = gzdopen(fileno(file), "wb");
+//     if (!gzfile) {
+//         fclose(file);
+//         printf("Error: Unable to open compressed stream.\n");
+//         return;
+//     }
 
-    saveDirectory(folder, gzfile); // Save directory structure into compressed stream
-    gzclose(gzfile);
+//     saveDirectory(folder, gzfile); // Save directory structure into compressed stream
+//     gzclose(gzfile);
 
-    printf("Directory compressed to %s.\n", filename);
-}
+//     printf("Directory compressed to %s.\n", filename);
+// }
 
 // Decompression (using zlib)
-node* decompressDirectory(const char* filename) {
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        printf("Error: Unable to open compressed file.\n");
-        return NULL;
-    }
+// node* decompressDirectory(const char* filename) {
+//     FILE* file = fopen(filename, "rb");
+//     if (!file) {
+//         printf("Error: Unable to open compressed file.\n");
+//         return NULL;
+//     }
 
-    gzFile gzfile = gzdopen(fileno(file), "rb");
-    if (!gzfile) {
-        fclose(file);
-        printf("Error: Unable to open compressed stream.\n");
-        return NULL;
-    }
+//     gzFile gzfile = gzdopen(fileno(file), "rb");
+//     if (!gzfile) {
+//         fclose(file);
+//         printf("Error: Unable to open compressed stream.\n");
+//         return NULL;
+//     }
 
-    node* folder = malloc(sizeof(node));
-    folder->child = loadDirectory(gzfile, folder); // Load directory structure from compressed stream
-    gzclose(gzfile);
+//     node* folder = malloc(sizeof(node));
+//     folder->child = loadDirectory(gzfile, folder); // Load directory structure from compressed stream
+//     gzclose(gzfile);
 
-    printf("Directory decompressed from %s.\n", filename);
-    return folder;
-}
+//     printf("Directory decompressed from %s.\n", filename);
+//     return folder;
+// }
 
 int main() {
 
@@ -932,7 +921,7 @@ int main() {
         char *command = getString();
 
         if (strncmp(command, "mkdir", 5) == 0) {
-            mkdir(currentFolder, command);
+            make_dir(currentFolder, command);
         } else if (strncmp(command, "touch", 5) == 0) {
             touch(currentFolder, command);
         } else if (strcmp(command, "ls") == 0) {
@@ -970,7 +959,7 @@ int main() {
             if (filename) {
                 FILE* file = fopen(filename, "r");
                 if (file) {
-                    freeNode(root);
+                    freeNode(root); // Free the current directory tree
                     root = (node*)malloc(sizeof(node));
                     root->type = Folder;
                     root->name = strdup("/");
@@ -1009,19 +998,19 @@ int main() {
             }
         } else if (strncmp(command, "compress", 8) == 0) {
             char* filename = strtok(command + 9, " ");
-            if (filename) {
-                compressDirectory(root, filename);
-            }
+            // if (filename) {
+            //     compressDirectory(root, filename);
+            // }
         } else if (strncmp(command, "decompress", 10) == 0) {
             char* filename = strtok(command + 11, " ");
-            if (filename) {
-                node* decompressedRoot = decompressDirectory(filename);
-                if (decompressedRoot) {
-                    freeNode(root);
-                    root = decompressedRoot;
-                    currentFolder = root;
-                }
-            }
+            // if (filename) {
+            //     node* decompressedRoot = decompressDirectory(filename);
+            //     if (decompressedRoot) {
+            //         freeNode(root);
+            //         root = decompressedRoot;
+            //         currentFolder = root;
+            //     }
+            // }
         } else if (strncmp(command, "rename", 6) == 0) {
             char* oldName = strtok(command + 7, " ");
             char* newName = strtok(NULL, " ");
