@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -std=c11 -g -D_POSIX_C_SOURCE=200809L -lz
+CFLAGS = -Wall -Wextra -pedantic -std=c11 -g -D_POSIX_C_SOURCE=200809L
 
 # Source files and target executable
 SRC = main.c
@@ -14,7 +14,7 @@ all: $(TARGET)
 
 # Compile the executable
 $(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) -lz
 
 # Run tests
 test: $(TARGET)
