@@ -166,8 +166,10 @@ node* loadDirectory(gzFile gz, node* parent) {
         newNode->symlinkTarget = NULL;
 
         // Parse node details
-        sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
-
+        char nameBuffer[256];
+        sscanf(line, "%d %s %zu %ld", (int*)&newNode->type, nameBuffer, &newNode->size, &newNode->date);
+        newNode->name = strdup(nameBuffer);
+        
         // Load content if present
         if (newNode->type == File && gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
             newNode->content = strdup(line + 8);
