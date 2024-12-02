@@ -152,13 +152,13 @@ void saveDirectory(node* folder, void* file) {
 
 // Week 2: Load Directory Structure
 // Function to load the directory from either a regular file or compressed file
-node* loadDirectory(FILE* file, node* parent) {
+node* loadDirectory(gzFile gz, node* parent) {
     char line[1024];
 
-    while (fgets(line, sizeof(line), file)) {
+    while (gzgets(gz, line, sizeof(line))) {
         if (strncmp(line, "END", 3) == 0) break;
 
-        node* newNode = (node*)malloc(sizeof(node));
+        node* newNode = malloc(sizeof(node));
         newNode->parent = parent;
         newNode->child = NULL;
         newNode->next = NULL;
@@ -168,16 +168,32 @@ node* loadDirectory(FILE* file, node* parent) {
         // Parse node details
         sscanf(line, "%d %ms %ld %ld", (int*)&newNode->type, &newNode->name, &newNode->size, &newNode->date);
 
-        // Read content if available
-        if (newNode->type == File && fgets(line, sizeof(line), file) && strncmp(line, "CONTENT:", 8) == 0) {
+        // Load content if present
+        if (newNode->type == File && gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
             newNode->content = strdup(line + 8);
-            newNode->content[strlen(newNode->content) - 1] = '\0'; // Remove newline
-        } else {
+            newNode->content[strlen(newNode->content) - 1] = '\0';
+
+            // Create real file
+            char path[1024];
+            snprintf(path, sizeof(path), "%s/%s", parent->name, newNode->name);
+            FILE* file = fopen(path, "w");
+            if (file) {
+                fprintf(file, "%s", newNode->content);
+                fclose(file);
+            }
+        } else if (newNode->type == File) {
             newNode->content = NULL;
         }
 
+        // Create real folder if applicable
+        if (newNode->type == Folder) {
+            char path[1024];
+            snprintf(path, sizeof(path), "%s/%s", parent->name, newNode->name);
+            mkdir(path, 0755);
+        }
+
         // Recursively load children
-        newNode->child = loadDirectory(file, newNode);
+        newNode->child = loadDirectory(gz, newNode);
 
         // Add to parent's children
         if (parent->child == NULL) {
