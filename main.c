@@ -119,15 +119,21 @@ int countFiles(node* folder) {
 
 // Week 2: Save Directory Structure
 // Function to save the directory to either a regular file or compressed file
-void saveDirectory(node* folder, FILE* file) {
+void saveDirectory(node* folder, void* file) {
     if (!folder) return;
 
-    // Save folder or file details
-    fprintf(file, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
+    gzFile gz = (gzFile)file;
 
-    // Save file content if it's a file
+    // Save folder/file details
+    if (gz) {
+        gzprintf(gz, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
+    }
+
+    // Save file content if present
     if (folder->type == File && folder->content) {
-        fprintf(file, "CONTENT:%s\n", folder->content);
+        if (gz) {
+            gzprintf(gz, "CONTENT:%s\n", folder->content);
+        }
     }
 
     // Recursively save child nodes
@@ -137,9 +143,12 @@ void saveDirectory(node* folder, FILE* file) {
         currentNode = currentNode->next;
     }
 
-    // Mark the end of this folder's children
-    fprintf(file, "END\n");
+    // Mark the end of the folder
+    if (gz) {
+        gzprintf(gz, "END\n");
+    }
 }
+
 
 // Week 2: Load Directory Structure
 // Function to load the directory from either a regular file or compressed file
