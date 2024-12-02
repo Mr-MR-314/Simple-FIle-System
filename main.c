@@ -169,7 +169,7 @@ node* loadDirectory(gzFile gz, node* parent) {
         char nameBuffer[256];
         sscanf(line, "%d %s %zu %ld", (int*)&newNode->type, nameBuffer, &newNode->size, &newNode->date);
         newNode->name = strdup(nameBuffer);
-        
+
         // Load content if present
         if (newNode->type == File && gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
             newNode->content = strdup(line + 8);
@@ -540,7 +540,7 @@ void edit(node* currentFolder, char* command) {
 void pwd(char *path) {
     if (strlen(path) != 1){
 
-        for (int i = 0; i < strlen(path)-1 ; ++i) {
+        for (size_t i = 0; i < strlen(path)-1 ; ++i) {
             printf("%c", path[i]);
         }
         printf("\n");
