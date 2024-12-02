@@ -983,31 +983,49 @@ int main() {
         } else if (strncmp(command, "save", 4) == 0) {
             char* filename = strtok(command + 5, " ");
             if (filename) {
-                FILE* file = fopen(filename, "w");
+                // Use gz compression for saving the directory structure
+                FILE* file = fopen(filename, "wb");
                 if (file) {
-                    saveDirectory(root, file);
-                    fclose(file);
-                    printf("Directory structure saved to %s\n", filename);
+                    gzFile gzfile = gzdopen(fileno(file), "wb");
+                    if (gzfile) {
+                        saveDirectory(root, gzfile);
+                        gzclose(gzfile);
+                        printf("Directory structure compressed and saved to '%s'.\n", filename);
+                    } else {
+                        fclose(file);
+                        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+                    }
                 } else {
-                    printf("Error: Could not open file for saving.\n");
+                    printf("Error: Could not create file '%s' for saving.\n", filename);
                 }
+            } else {
+                printf("Error: No filename provided for saving.\n");
             }
         } else if (strncmp(command, "load", 4) == 0) {
             char* filename = strtok(command + 5, " ");
             if (filename) {
-                FILE* file = fopen(filename, "r");
+                // Use gz decompression for loading the directory structure
+                FILE* file = fopen(filename, "rb");
                 if (file) {
-                    freeNode(root); // Free the current directory tree
-                    root = (node*)malloc(sizeof(node));
-                    root->type = Folder;
-                    root->name = strdup("/");
-                    root->child = loadDirectory(file, root);
-                    fclose(file);
-                    currentFolder = root;
-                    printf("Directory structure loaded from %s\n", filename);
+                    gzFile gzfile = gzdopen(fileno(file), "rb");
+                    if (gzfile) {
+                        freeNode(root); // Free the current directory tree in memory
+                        root = (node*)malloc(sizeof(node));
+                        root->type = Folder;
+                        root->name = strdup("/");
+                        root->child = loadDirectory(gzfile, root);
+                        gzclose(gzfile);
+                        currentFolder = root; // Reset current folder to root
+                        printf("Directory structure decompressed and loaded from '%s'.\n", filename);
+                    } else {
+                        fclose(file);
+                        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+                    }
                 } else {
-                    printf("Error: Could not open file for loading.\n");
+                    printf("Error: Could not open file '%s' for loading.\n", filename);
                 }
+            } else {
+                printf("Error: No filename provided for loading.\n");
             }
         } else if (strncmp(command, "merge", 5) == 0) {
             char* srcName = strtok(command + 6, " ");
