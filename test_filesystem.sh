@@ -9,7 +9,7 @@ YELLOW="\e[33m"
 RESET="\e[0m"
 
 # Define the executable name
-EXECUTABLE="./filesystem" # Change this to the actual compiled program name
+EXECUTABLE="./linux_file_system.out" # Change this to the actual compiled program name
 
 # Check if executable exists
 if [[ ! -f "$EXECUTABLE" ]]; then

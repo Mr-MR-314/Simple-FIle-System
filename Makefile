@@ -4,7 +4,7 @@ CFLAGS = -Wall -Wextra -pedantic -std=c11 -g -D_POSIX_C_SOURCE=200809L
 
 # Source files and target executable
 SRC = main.c
-TARGET = filesystem
+TARGET = linux_file_system.out
 
 # Test script
 TEST_SCRIPT = test_filesystem.sh
