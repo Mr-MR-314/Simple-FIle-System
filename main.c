@@ -848,27 +848,29 @@ void createSymlink(node* currentFolder, char* target, char* linkName) {
 }
 
 // Compression (using zlib)
-// void compressDirectory(node* folder, const char* filename) {
-//     if (!folder) return;
+void compressDirectory(node* folder, const char* filename) {
+    if (!folder) return;
 
-//     FILE* file = fopen(filename, "wb");
-//     if (!file) {
-//         printf("Error: Unable to create compressed file.\n");
-//         return;
-//     }
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        printf("Error: Unable to create compressed file '%s'.\n", filename);
+        return;
+    }
 
-//     gzFile gzfile = gzdopen(fileno(file), "wb");
-//     if (!gzfile) {
-//         fclose(file);
-//         printf("Error: Unable to open compressed stream.\n");
-//         return;
-//     }
+    gzFile gzfile = gzdopen(fileno(file), "wb");
+    if (!gzfile) {
+        fclose(file);
+        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+        return;
+    }
 
-//     saveDirectory(folder, gzfile); // Save directory structure into compressed stream
-//     gzclose(gzfile);
+    // Save the directory structure into the compressed stream
+    saveDirectory(folder, gzfile);
+    gzclose(gzfile);
 
-//     printf("Directory compressed to %s.\n", filename);
-// }
+    printf("Directory compressed to '%s'.\n", filename);
+}
+
 
 // Decompression (using zlib)
 // node* decompressDirectory(const char* filename) {
