@@ -62,10 +62,10 @@ void mov(node* currentFolder, char* command);
 int countFiles(node* folder);
 
 // Function to save the directory structure to a file or compressed file
-void saveDirectory(node* folder, FILE* file);
+void saveDirectory(node* folder, void* file);
 
 // Function to load the directory structure from a file or compressed file
-node* loadDirectory(FILE* file, node* parent);
+node* loadDirectory(gzFile gz, node* parent);
 
 // Function to merge two directories, resolving conflicts interactively
 void mergeDirectories(node* destFolder, node* srcFolder);
@@ -898,27 +898,38 @@ void compressDirectory(node* folder, const char* filename) {
 
 
 // Decompression (using zlib)
-// node* decompressDirectory(const char* filename) {
-//     FILE* file = fopen(filename, "rb");
-//     if (!file) {
-//         printf("Error: Unable to open compressed file.\n");
-//         return NULL;
-//     }
+node* decompressDirectory(const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        printf("Error: Unable to open compressed file '%s'.\n", filename);
+        return NULL;
+    }
 
-//     gzFile gzfile = gzdopen(fileno(file), "rb");
-//     if (!gzfile) {
-//         fclose(file);
-//         printf("Error: Unable to open compressed stream.\n");
-//         return NULL;
-//     }
+    gzFile gzfile = gzdopen(fileno(file), "rb");
+    if (!gzfile) {
+        fclose(file);
+        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+        return NULL;
+    }
 
-//     node* folder = malloc(sizeof(node));
-//     folder->child = loadDirectory(gzfile, folder); // Load directory structure from compressed stream
-//     gzclose(gzfile);
+    // Create the root node
+    node* folder = malloc(sizeof(node));
+    folder->type = Folder;
+    folder->name = strdup("/");
+    folder->parent = NULL;
+    folder->child = NULL;
+    folder->next = NULL;
+    folder->previous = NULL;
+    folder->symlinkTarget = NULL;
 
-//     printf("Directory decompressed from %s.\n", filename);
-//     return folder;
-// }
+    // Load the directory structure from the compressed stream
+    folder->child = loadDirectory(gzfile, folder);
+    gzclose(gzfile);
+
+    printf("Directory decompressed from '%s'.\n", filename);
+    return folder;
+}
+
 
 int main() {
 
@@ -1025,19 +1036,19 @@ int main() {
             }
         } else if (strncmp(command, "compress", 8) == 0) {
             char* filename = strtok(command + 9, " ");
-            // if (filename) {
-            //     compressDirectory(root, filename);
-            // }
+            if (filename) {
+                compressDirectory(root, filename);
+            }
         } else if (strncmp(command, "decompress", 10) == 0) {
             char* filename = strtok(command + 11, " ");
-            // if (filename) {
-            //     node* decompressedRoot = decompressDirectory(filename);
-            //     if (decompressedRoot) {
-            //         freeNode(root);
-            //         root = decompressedRoot;
-            //         currentFolder = root;
-            //     }
-            // }
+            if (filename) {
+                node* decompressedRoot = decompressDirectory(filename);
+                if (decompressedRoot) {
+                    freeNode(root);
+                    root = decompressedRoot;
+                    currentFolder = root;
+                }
+            }
         } else if (strncmp(command, "rename", 6) == 0) {
             char* oldName = strtok(command + 7, " ");
             char* newName = strtok(NULL, " ");
