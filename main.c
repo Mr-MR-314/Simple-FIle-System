@@ -779,6 +779,14 @@ void edit(node* currentFolder, char* command) {
     }
 }
 
+void clear() {
+    #ifdef _WIN32
+        system("cls"); // Windows-specific command to clear the screen
+    #else
+        system("clear"); // Unix/Linux/Mac command to clear the screen
+    #endif
+}
+
 
 void pwd(char *path) {
     if (path && strlen(path) > 0) {
@@ -1243,6 +1251,8 @@ int main() {
             lsrecursive(currentFolder, 0);
         } else if (strncmp(command, "edit", 4) == 0 ) {
             edit(currentFolder, command);
+        } else if (strncmp(command, "clear", 5) == 0) {
+            clear(); // Call the clear function
         } else if (strcmp(command, "pwd") == 0) {
             pwd(path);
         } else if (strcmp(command, "cdup") == 0) {
