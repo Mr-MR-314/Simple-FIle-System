@@ -13,6 +13,9 @@ bin/
 obj/
 test_dir/
 
+# Test directories
+test/
+
 # Temporary files
 *.tmp
 *.temp

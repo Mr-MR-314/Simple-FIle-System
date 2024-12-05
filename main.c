@@ -117,6 +117,22 @@ int countFiles(node* folder) {
     return count;
 }
 
+int countFolder(node* folder) {
+    if (!folder) return 0;
+
+    int count = 0;
+    if (folder->type == Folder) {
+        count++;
+    }
+
+    node* currentNode = folder->child;
+    while (currentNode) {
+        count += countFiles(currentNode);
+        currentNode = currentNode->next;
+    }
+    return count;
+}
+
 // Week 2: Save Directory Structure
 // Function to save the directory to either a regular file or compressed file
 void saveDirectory(node* folder, void* file) {
@@ -982,6 +998,8 @@ int main() {
             mov(currentFolder, command);
         } else if (strcmp(command, "countFiles") == 0) {
             printf("Total files: %d\n", countFiles(root));
+        else if (strcmp(command, "countFolders") == 0) {
+            printf("Total folders: %d\n", countFolders(root));
         } else if (strncmp(command, "save", 4) == 0) {
             char* filename = strtok(command + 5, " ");
             if (filename) {
