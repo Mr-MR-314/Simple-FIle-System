@@ -996,6 +996,10 @@ int main() {
             rm(currentFolder, command);
         } else if (strncmp(command, "mov", 3) == 0) {
             mov(currentFolder, command);
+        } else if (strcmp(command, "count") == 0) {
+            int fileCount = countFiles(currentFolder);
+            int folderCount = countFolders(currentFolder);
+            printf("Files: %d\nFolders: %d\n", fileCount, folderCount);
         } else if (strcmp(command, "countFiles") == 0) {
             printf("Total files: %d\n", countFiles(root));
         } else if (strcmp(command, "countFolders") == 0) {
