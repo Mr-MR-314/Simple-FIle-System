@@ -61,11 +61,11 @@ void mov(node* currentFolder, char* command);
 // Function to count the total number of files in the entire directory tree
 int countFiles(node* folder);
 
-// Function to save the directory structure to a file or compressed file
-void saveDirectory(node* folder, void* file);
+// // Function to save the directory structure to a file or compressed file
+// void saveDirectory(node* folder, void* file);
 
-// Function to load the directory structure from a file or compressed file
-node* loadDirectory(gzFile gz, node* parent);
+// // Function to load the directory structure from a file or compressed file
+// node* loadDirectory(gzFile gz, node* parent);
 
 // Function to merge two directories, resolving conflicts interactively
 void mergeDirectories(node* destFolder, node* srcFolder);
@@ -133,104 +133,292 @@ int countFolders(node* folder) {
     return count;
 }
 
-// Week 2: Save Directory Structure
-// Function to save the directory to either a regular file or compressed file
-void saveDirectory(node* folder, void* file) {
+void saveDirectoryToFile(node* folder, FILE* file, int depth) {
     if (!folder) return;
 
-    gzFile gz = (gzFile)file;
+    // Indentation for better readability
+    for (int i = 0; i < depth; i++) fprintf(file, "  ");
+    fprintf(file, "{\n");
 
-    // Save folder/file details
-    if (gz) {
-        gzprintf(gz, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
-    }
+    // Write folder/file properties
+    for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+    fprintf(file, "\"type\": \"%s\",\n", folder->type == Folder ? "Folder" : (folder->type == File ? "File" : "Symlink"));
 
-    // Save file content if present
+    for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+    fprintf(file, "\"name\": \"%s\",\n", folder->name);
+
+    for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+    fprintf(file, "\"size\": %zu,\n", folder->size);
+
+    for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+    fprintf(file, "\"date\": %ld", folder->date);
+
     if (folder->type == File && folder->content) {
-        if (gz) {
-            gzprintf(gz, "CONTENT:%s\n", folder->content);
-        }
+        fprintf(file, ",\n");
+        for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+        fprintf(file, "\"content\": \"%s\"", folder->content);
     }
 
-    // Recursively save child nodes
-    node* currentNode = folder->child;
-    while (currentNode) {
-        saveDirectory(currentNode, file);
-        currentNode = currentNode->next;
+    if (folder->type == Symlink) {
+        fprintf(file, ",\n");
+        for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+        fprintf(file, "\"symlinkTarget\": \"%s\"", folder->symlinkTarget);
     }
 
-    // Mark the end of the folder
-    if (gz) {
-        gzprintf(gz, "END\n");
+    // Children
+    fprintf(file, ",\n");
+    for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+    fprintf(file, "\"children\": [\n");
+
+    node* current = folder->child;
+    while (current) {
+        saveDirectoryToFile(current, file, depth + 1);
+        current = current->next;
+        if (current) fprintf(file, ",\n");
     }
+
+    // Closing children array
+    fprintf(file, "\n");
+    for (int i = 0; i <= depth; i++) fprintf(file, "  ");
+    fprintf(file, "]\n");
+
+    // Closing this node
+    for (int i = 0; i < depth; i++) fprintf(file, "  ");
+    fprintf(file, "}");
+}
+
+void saveDirectory(node* root, const char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        printf("Error: Could not open file '%s' for saving.\n", filename);
+        return;
+    }
+
+    saveDirectoryToFile(root, file, 0);
+    fprintf(file, "\n"); // Final newline for cleanliness
+    fclose(file);
+
+    printf("Directory structure saved to '%s'.\n", filename);
 }
 
 
-// Week 2: Load Directory Structure
-// Function to load the directory from either a regular file or compressed file
-node* loadDirectory(gzFile gz, node* parent) {
+node* loadDirectoryFromFile(FILE* file, node* parent) {
     char line[1024];
+    node* firstChild = NULL;
+    node* previousSibling = NULL;
 
-    while (gzgets(gz, line, sizeof(line))) {
-        if (strncmp(line, "END", 3) == 0) break;
+    while (fgets(line, sizeof(line), file)) {
+        // End of the current folder's children
+        if (strstr(line, "]")) break;
 
-        node* newNode = malloc(sizeof(node));
-        newNode->parent = parent;
-        newNode->child = NULL;
-        newNode->next = NULL;
-        newNode->previous = NULL;
-        newNode->symlinkTarget = NULL;
+        // Check for opening brace indicating a new node
+        if (strstr(line, "{")) {
+            // Create a new node
+            node* newNode = malloc(sizeof(node));
+            newNode->parent = parent;
+            newNode->child = NULL;
+            newNode->next = NULL;
+            newNode->previous = previousSibling;
+            newNode->symlinkTarget = NULL;
+            newNode->numberOfItems = 0;
 
-        // Parse node details
-        char nameBuffer[256];
-        sscanf(line, "%d %s %zu %ld", (int*)&newNode->type, nameBuffer, &newNode->size, &newNode->date);
-        newNode->name = strdup(nameBuffer);
-
-        // Load content if present
-        if (newNode->type == File && gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
-            newNode->content = strdup(line + 8);
-            newNode->content[strlen(newNode->content) - 1] = '\0';
-
-            // Create real file
-            char path[1024];
-            snprintf(path, sizeof(path), "%s/%s", parent->name, newNode->name);
-            FILE* file = fopen(path, "w");
-            if (file) {
-                fprintf(file, "%s", newNode->content);
-                fclose(file);
+            // Parse node properties
+            while (fgets(line, sizeof(line), file) && !strstr(line, "}")) {
+                if (strstr(line, "\"type\":")) {
+                    if (strstr(line, "Folder")) {
+                        newNode->type = Folder;
+                    } else if (strstr(line, "File")) {
+                        newNode->type = File;
+                    } else if (strstr(line, "Symlink")) {
+                        newNode->type = Symlink;
+                    }
+                } else if (strstr(line, "\"name\":")) {
+                    char name[256];
+                    sscanf(line, " \"name\": \"%255[^\"]\"", name);
+                    newNode->name = strdup(name);
+                } else if (strstr(line, "\"size\":")) {
+                    sscanf(line, " \"size\": %zu", &newNode->size);
+                } else if (strstr(line, "\"date\":")) {
+                    sscanf(line, " \"date\": %ld", &newNode->date);
+                } else if (strstr(line, "\"symlinkTarget\":")) {
+                    char target[256];
+                    sscanf(line, " \"symlinkTarget\": \"%255[^\"]\"", target);
+                    newNode->symlinkTarget = strdup(target);
+                } else if (strstr(line, "\"content\":")) {
+                    char content[1024];
+                    sscanf(line, " \"content\": \"%1023[^\"]\"", content);
+                    newNode->content = strdup(content);
+                } else if (strstr(line, "\"children\":")) {
+                    // Recursively load children
+                    newNode->child = loadDirectoryFromFile(file, newNode);
+                    newNode->numberOfItems = countFiles(newNode);// + countFolders(newNode); // Update count
+                }
             }
-        } else if (newNode->type == File) {
-            newNode->content = NULL;
-        }
 
-        // Create real folder if applicable
-        if (newNode->type == Folder) {
-            char path[1024];
-            snprintf(path, sizeof(path), "%s/%s", parent->name, newNode->name);
-            mkdir(path, 0755);
-        }
+            // Link sibling nodes properly
+            if (!firstChild) {
+                firstChild = newNode; // First child under this parent
+            } else {
+                previousSibling->next = newNode; // Link as a sibling
+                newNode->previous = previousSibling; // Update previous pointer for the new node
+            }
+            previousSibling = newNode; // Update the last sibling pointer
 
-        // Recursively load children
-        newNode->child = loadDirectory(gz, newNode);
-
-        // Add to parent's children
-        if (parent->child == NULL) {
-            parent->child = newNode;
-        } else {
-            node* last = parent->child;
-            while (last->next) last = last->next;
-            last->next = newNode;
-            newNode->previous = last;
+            // Debug output to track structure
+            printf("Loaded: %s (%s)\n", newNode->name,
+                   (newNode->type == Folder ? "Folder" :
+                   (newNode->type == File ? "File" : "Symlink")));
         }
     }
 
-    return parent ? parent->child : NULL;
+    return firstChild;
 }
+
+node* loadDirectory(const char* filename) {
+    FILE* file = fopen(filename, "r");
+    if (!file) {
+        printf("Error: Could not open file '%s' for loading.\n", filename);
+        return NULL;
+    }
+
+    // node* root = malloc(sizeof(node));
+    // root->type = Folder;
+    // root->name = strdup("/");
+    // root->parent = NULL;
+    // root->child = NULL;
+    // root->next = NULL;
+    // root->previous = NULL;
+    // root->symlinkTarget = NULL;
+    // root->numberOfItems = 0;
+
+    // Load the directory tree from the file
+    node* loadedRoot = loadDirectoryFromFile(file, NULL);
+    loadedRoot->numberOfItems = countFiles(loadedRoot);
+    fclose(file);
+
+    // Ensure the loaded root has the correct parent-child structure
+    if (loadedRoot) {
+        printf("Directory structure loaded from '%s'.\n", filename);
+        return loadedRoot;
+    } else {
+        printf("Error: Failed to load directory structure from '%s'.\n", filename);
+        return NULL;
+    }
+}
+
+
+// // Week 2: Save Directory Structure
+// // Function to save the directory to either a regular file or compressed file
+// void saveDirectory(node* folder, void* file) {
+//     if (!folder) return;
+
+//     gzFile gz = (gzFile)file;
+
+//     // Save folder/file details
+//     if (gz) {
+//         gzprintf(gz, "%d %s %ld %ld\n", folder->type, folder->name, folder->size, folder->date);
+//     }
+
+//     // Save file content if present
+//     if (folder->type == File && folder->content) {
+//         if (gz) {
+//             gzprintf(gz, "CONTENT:%s\n", folder->content);
+//         }
+//     }
+
+//     // Recursively save child nodes
+//     node* currentNode = folder->child;
+//     while (currentNode) {
+//         saveDirectory(currentNode, file);
+//         currentNode = currentNode->next;
+//     }
+
+//     // Mark the end of the folder
+//     if (gz) {
+//         gzprintf(gz, "END\n");
+//     }
+// }
+
+
+// // Week 2: Load Directory Structure
+// // Function to load the directory from either a regular file or compressed file
+// node* loadDirectory(gzFile gz, node* parent) {
+//     char line[1024];
+
+//     while (gzgets(gz, line, sizeof(line))) {
+//         if (strncmp(line, "END", 3) == 0) break;
+
+//         node* newNode = malloc(sizeof(node));
+//         newNode->parent = parent;
+//         newNode->child = NULL;
+//         newNode->next = NULL;
+//         newNode->previous = NULL;
+//         newNode->symlinkTarget = NULL;
+
+//         // Parse node details
+//         char nameBuffer[256];
+//         sscanf(line, "%d %s %zu %ld", (int*)&newNode->type, nameBuffer, &newNode->size, &newNode->date);
+//         newNode->name = strdup(nameBuffer);
+
+//         // Load content if present
+//         if (newNode->type == File && gzgets(gz, line, sizeof(line)) && strncmp(line, "CONTENT:", 8) == 0) {
+//             newNode->content = strdup(line + 8);
+//             newNode->content[strlen(newNode->content) - 1] = '\0';
+
+//             // Create real file
+//             char path[1024];
+//             snprintf(path, sizeof(path), "%s/%s", parent->name, newNode->name);
+//             FILE* file = fopen(path, "w");
+//             if (file) {
+//                 fprintf(file, "%s", newNode->content);
+//                 fclose(file);
+//             }
+//         } else if (newNode->type == File) {
+//             newNode->content = NULL;
+//         }
+
+//         // Create real folder if applicable
+//         if (newNode->type == Folder) {
+//             char path[1024];
+//             snprintf(path, sizeof(path), "%s/%s", parent->name, newNode->name);
+//             mkdir(path, 0755);
+//         }
+
+//         // Recursively load children
+//         newNode->child = loadDirectory(gz, newNode);
+
+//         // Add to parent's children
+//         if (parent->child == NULL) {
+//             parent->child = newNode;
+//         } else {
+//             node* last = parent->child;
+//             while (last->next) last = last->next;
+//             last->next = newNode;
+//             newNode->previous = last;
+//         }
+//     }
+
+//     return parent ? parent->child : NULL;
+// }
 
 // Week 3: Rename Node
 void renameNode(node* currentNode, const char* newName) {
-    if (!currentNode) return;
+    if (!currentNode) {
+        printf("Error: Node does not exist.\n");
+        return;
+    }
 
+    // Check for conflicting names in the same directory
+    node* sibling = currentNode->parent ? currentNode->parent->child : NULL;
+    while (sibling) {
+        if (sibling != currentNode && strcmp(sibling->name, newName) == 0) {
+            printf("Error: A node with the name '%s' already exists in the current directory.\n", newName);
+            return;
+        }
+        sibling = sibling->next;
+    }
+
+    // Free the old name and assign the new name
     free(currentNode->name);
     currentNode->name = strdup(newName);
     printf("Renamed to '%s'\n", currentNode->name);
@@ -891,62 +1079,62 @@ void createSymlink(node* currentFolder, char* target, char* linkName) {
 }
 
 // Compression (using zlib)
-void compressDirectory(node* folder, const char* filename) {
-    if (!folder) return;
+// void compressDirectory(node* folder, const char* filename) {
+//     if (!folder) return;
 
-    FILE* file = fopen(filename, "wb");
-    if (!file) {
-        printf("Error: Unable to create compressed file '%s'.\n", filename);
-        return;
-    }
+//     FILE* file = fopen(filename, "wb");
+//     if (!file) {
+//         printf("Error: Unable to create compressed file '%s'.\n", filename);
+//         return;
+//     }
 
-    gzFile gzfile = gzdopen(fileno(file), "wb");
-    if (!gzfile) {
-        fclose(file);
-        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
-        return;
-    }
+//     gzFile gzfile = gzdopen(fileno(file), "wb");
+//     if (!gzfile) {
+//         fclose(file);
+//         printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+//         return;
+//     }
 
-    // Save the directory structure into the compressed stream
-    saveDirectory(folder, gzfile);
-    gzclose(gzfile);
+//     // Save the directory structure into the compressed stream
+//     saveDirectory(folder, gzfile);
+//     gzclose(gzfile);
 
-    printf("Directory compressed to '%s'.\n", filename);
-}
+//     printf("Directory compressed to '%s'.\n", filename);
+// }
 
 
-// Decompression (using zlib)
-node* decompressDirectory(const char* filename) {
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        printf("Error: Unable to open compressed file '%s'.\n", filename);
-        return NULL;
-    }
+// // Decompression (using zlib)
+// node* decompressDirectory(const char* filename) {
+//     FILE* file = fopen(filename, "rb");
+//     if (!file) {
+//         printf("Error: Unable to open compressed file '%s'.\n", filename);
+//         return NULL;
+//     }
 
-    gzFile gzfile = gzdopen(fileno(file), "rb");
-    if (!gzfile) {
-        fclose(file);
-        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
-        return NULL;
-    }
+//     gzFile gzfile = gzdopen(fileno(file), "rb");
+//     if (!gzfile) {
+//         fclose(file);
+//         printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+//         return NULL;
+//     }
 
-    // Create the root node
-    node* folder = malloc(sizeof(node));
-    folder->type = Folder;
-    folder->name = strdup("/");
-    folder->parent = NULL;
-    folder->child = NULL;
-    folder->next = NULL;
-    folder->previous = NULL;
-    folder->symlinkTarget = NULL;
+//     // Create the root node
+//     node* folder = malloc(sizeof(node));
+//     folder->type = Folder;
+//     folder->name = strdup("/");
+//     folder->parent = NULL;
+//     folder->child = NULL;
+//     folder->next = NULL;
+//     folder->previous = NULL;
+//     folder->symlinkTarget = NULL;
 
-    // Load the directory structure from the compressed stream
-    folder->child = loadDirectory(gzfile, folder);
-    gzclose(gzfile);
+//     // Load the directory structure from the compressed stream
+//     folder->child = loadDirectory(gzfile, folder);
+//     gzclose(gzfile);
 
-    printf("Directory decompressed from '%s'.\n", filename);
-    return folder;
-}
+//     printf("Directory decompressed from '%s'.\n", filename);
+//     return folder;
+// }
 
 
 int main() {
@@ -1007,50 +1195,70 @@ int main() {
         } else if (strncmp(command, "save", 4) == 0) {
             char* filename = strtok(command + 5, " ");
             if (filename) {
-                // Use gz compression for saving the directory structure
-                FILE* file = fopen(filename, "wb");
-                if (file) {
-                    gzFile gzfile = gzdopen(fileno(file), "wb");
-                    if (gzfile) {
-                        saveDirectory(root, gzfile);
-                        gzclose(gzfile);
-                        printf("Directory structure compressed and saved to '%s'.\n", filename);
-                    } else {
-                        fclose(file);
-                        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
-                    }
-                } else {
-                    printf("Error: Could not create file '%s' for saving.\n", filename);
-                }
+                saveDirectory(root, filename);  // Save the entire directory tree to the specified file
             } else {
                 printf("Error: No filename provided for saving.\n");
             }
+
+            // char* filename = strtok(command + 5, " ");
+            // if (filename) {
+            //     // Use gz compression for saving the directory structure
+            //     FILE* file = fopen(filename, "wb");
+            //     if (file) {
+            //         gzFile gzfile = gzdopen(fileno(file), "wb");
+            //         if (gzfile) {
+            //             saveDirectory(root, gzfile);
+            //             gzclose(gzfile);
+            //             printf("Directory structure compressed and saved to '%s'.\n", filename);
+            //         } else {
+            //             fclose(file);
+            //             printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+            //         }
+            //     } else {
+            //         printf("Error: Could not create file '%s' for saving.\n", filename);
+            //     }
+            // } else {
+            //     printf("Error: No filename provided for saving.\n");
+            // }
         } else if (strncmp(command, "load", 4) == 0) {
             char* filename = strtok(command + 5, " ");
             if (filename) {
-                // Use gz decompression for loading the directory structure
-                FILE* file = fopen(filename, "rb");
-                if (file) {
-                    gzFile gzfile = gzdopen(fileno(file), "rb");
-                    if (gzfile) {
-                        freeNode(root); // Free the current directory tree in memory
-                        root = (node*)malloc(sizeof(node));
-                        root->type = Folder;
-                        root->name = strdup("/");
-                        root->child = loadDirectory(gzfile, root);
-                        gzclose(gzfile);
-                        currentFolder = root; // Reset current folder to root
-                        printf("Directory structure decompressed and loaded from '%s'.\n", filename);
-                    } else {
-                        fclose(file);
-                        printf("Error: Unable to open compressed stream for '%s'.\n", filename);
-                    }
-                } else {
-                    printf("Error: Could not open file '%s' for loading.\n", filename);
+                node* loadedRoot = loadDirectory(filename);  // Load the directory tree from the specified file
+                if (loadedRoot) {
+                    freeNode(root);      // Free the current directory tree in memory
+                    root = loadedRoot;   // Replace with the loaded directory tree
+                    currentFolder = root; // Reset current folder to the root of the loaded tree
+                    free(path);
+                    path = strdup("/");  // Reset the path to the root
                 }
             } else {
                 printf("Error: No filename provided for loading.\n");
             }
+            // char* filename = strtok(command + 5, " ");
+            // if (filename) {
+            //     // Use gz decompression for loading the directory structure
+            //     FILE* file = fopen(filename, "rb");
+            //     if (file) {
+            //         gzFile gzfile = gzdopen(fileno(file), "rb");
+            //         if (gzfile) {
+            //             freeNode(root); // Free the current directory tree in memory
+            //             root = (node*)malloc(sizeof(node));
+            //             root->type = Folder;
+            //             root->name = strdup("/");
+            //             root->child = loadDirectory(gzfile, root);
+            //             gzclose(gzfile);
+            //             currentFolder = root; // Reset current folder to root
+            //             printf("Directory structure decompressed and loaded from '%s'.\n", filename);
+            //         } else {
+            //             fclose(file);
+            //             printf("Error: Unable to open compressed stream for '%s'.\n", filename);
+            //         }
+            //     } else {
+            //         printf("Error: Could not open file '%s' for loading.\n", filename);
+            //     }
+            // } else {
+            //     printf("Error: No filename provided for loading.\n");
+            // }
         } else if (strncmp(command, "merge", 5) == 0) {
             char* srcName = strtok(command + 6, " ");
             char* destName = strtok(NULL, " ");
@@ -1077,26 +1285,33 @@ int main() {
                 printf("Error: Sort criterion must be 'name' or 'date'.\n");
             }
         } else if (strncmp(command, "compress", 8) == 0) {
-            char* filename = strtok(command + 9, " ");
-            if (filename) {
-                compressDirectory(root, filename);
-            }
+            // char* filename = strtok(command + 9, " ");
+            // if (filename) {
+            //     compressDirectory(root, filename);
+            // }
         } else if (strncmp(command, "decompress", 10) == 0) {
-            char* filename = strtok(command + 11, " ");
-            if (filename) {
-                node* decompressedRoot = decompressDirectory(filename);
-                if (decompressedRoot) {
-                    freeNode(root);
-                    root = decompressedRoot;
-                    currentFolder = root;
-                }
-            }
+            // char* filename = strtok(command + 11, " ");
+            // if (filename) {
+            //     node* decompressedRoot = decompressDirectory(filename);
+            //     if (decompressedRoot) {
+            //         freeNode(root);
+            //         root = decompressedRoot;
+            //         currentFolder = root;
+            //     }
+            // }
         } else if (strncmp(command, "rename", 6) == 0) {
             char* oldName = strtok(command + 7, " ");
-            char* newName = strtok(NULL, " ");
-            if (oldName && newName) {
-                node* targetNode = NULL; // Find target node logic
-                if (targetNode) renameNode(targetNode, newName);
+    char* newName = strtok(NULL, " ");
+    if (oldName && newName) {
+            // Locate the node with the old name
+            node* targetNode = getNodeTypeless(currentFolder, oldName);
+                if (targetNode) {
+                    renameNode(targetNode, newName); // Call the updated rename function
+                } else {
+                    printf("Error: Node '%s' not found in the current directory.\n", oldName);
+                }
+            } else {
+                printf("Error: Insufficient arguments. Usage: rename <oldName> <newName>\n");
             }
         } else if (strncmp(command, "fullpath", 8) == 0) {
             displayFullPath(currentFolder);
