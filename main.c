@@ -8,6 +8,11 @@
 
 enum nodeType {File, Folder, Symlink};
 
+    // Define Google colors using ANSI escape codes
+    const char* BLUE = "\033[38;5;33m";  // Google Blue
+    const char* GREEN = "\033[38;5;46m"; // Google Green
+    const char* RESET = "\033[0m";       // Reset to default
+
 typedef struct node {
     enum nodeType type;
     char* name;
@@ -692,7 +697,7 @@ void lsrecursive(node *currentFolder, int indentCount) {
             printf("\t");
         }
         if (indentCount != 0 ) {
-            printf("|_");
+            printf("└─");
         }
         printf("___Empty____\n");
     } else {
@@ -1213,6 +1218,10 @@ void createSymlink(node* currentFolder, char* target, char* linkName) {
 //     return folder;
 // }
 
+void displayPrompt(const char* path) {
+    printf("┌──[%s%s%s]\n└─%s>%s ", BLUE, path, RESET, GREEN, RESET);
+}
+
 
 int main() {
 
@@ -1238,7 +1247,7 @@ int main() {
 
     while (1) {
 
-        printf("> ");
+        displayPrompt(path);
         char *command = getString();
 
         if (strncmp(command, "mkdir", 5) == 0) {
