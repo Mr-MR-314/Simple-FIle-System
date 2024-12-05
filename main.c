@@ -781,14 +781,12 @@ void edit(node* currentFolder, char* command) {
 
 
 void pwd(char *path) {
-    if (strlen(path) != 1){
-
-        for (size_t i = 0; i < strlen(path)-1 ; ++i) {
-            printf("%c", path[i]);
-        }
-        printf("\n");
-    } else {
+    if (path && strlen(path) > 0) {
+        // Print the path directly without trimming the last character
         printf("%s\n", path);
+    } else {
+        // Default to root if the path is not set or invalid
+        printf("/\n");
     }
 }
 
