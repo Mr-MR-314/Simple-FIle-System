@@ -92,6 +92,7 @@ node* decompressDirectory(const char* filename);
 
 // Function to get a node
 node* getNode(node *currentFolder, char* name, enum nodeType type);
+node* getNodeTypeless(node *currentFolder, char* name);
 
 // Function to display coloful nodes
 void displayNode(node* item);
@@ -154,7 +155,7 @@ node* parsePath(node* currentFolder, char* path, node* root) {
     }
 
     char* token = strtok(path, "/");
-    while (token) {
+    while (token != NULL) {
         if (strcmp(token, "..") == 0) {
             // Move to the parent directory
             if (currentFolder->parent) {
@@ -163,15 +164,14 @@ node* parsePath(node* currentFolder, char* path, node* root) {
                 printf("Already at the root directory.\n");
             }
         } else if (strcmp(token, ".") == 0) {
-            // Stay in the current directory
-            // Do nothing
+            // Stay in the current directory (do nothing)
         } else {
-            // Move to a child directory
-            node* nextFolder = getNode(currentFolder, token, -1); // Check for any type (folder/file)
+            // Use getNodeTypeless to find the child node by name
+            node* nextFolder = getNodeTypeless(currentFolder, token);
             if (nextFolder) {
                 currentFolder = nextFolder;
             } else {
-                printf("Error: Directory '%s' not found.\n", token);
+                printf("Error: Directory or file '%s' not found.\n", token);
                 return NULL;
             }
         }
@@ -1116,7 +1116,7 @@ void mergeDirectories(node* destFolder, node* srcFolder) {
 
 // Handle symbolic links
 int createSymlink(node* currentFolder, char* sourcePath, char* linkName, node* root) {
-    // Use parsePath to find the target node
+    // Use parsePath to find the source node
     node* sourceNode = parsePath(currentFolder, sourcePath, root);
     if (sourceNode == NULL) {
         printf("Error: Source '%s' not found.\n", sourcePath);
@@ -1124,7 +1124,7 @@ int createSymlink(node* currentFolder, char* sourcePath, char* linkName, node* r
     }
 
     // Check if a node with the linkName already exists in the current folder
-    node* existingNode = getNode(currentFolder, linkName, -1); // Check for any type
+    node* existingNode = getNodeTypeless(currentFolder, linkName); // Use getNodeTypeless
     if (existingNode != NULL) {
         printf("Error: A node with the name '%s' already exists.\n", linkName);
         return -1;
