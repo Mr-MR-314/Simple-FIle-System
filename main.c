@@ -759,6 +759,13 @@ node* cd(node *currentFolder, char *command, char **path) {
         char* folderName = strtok(NULL, " ");
         if (folderName != NULL) {
 
+            // Navigate to root explicitly
+            if (strcmp(folderName, "/") == 0) {
+                *path = realloc(*path, sizeof(char) * 2);
+                strcpy(*path, "/");
+                return currentFolder; // Assuming currentFolder is root when "cd /" is called
+            }
+
             node *destinationFolder = getNode(currentFolder, folderName, Folder);
 
             if ( destinationFolder != NULL) {
