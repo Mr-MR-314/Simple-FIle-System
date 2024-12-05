@@ -94,6 +94,9 @@ node* decompressDirectory(const char* filename);
 node* getNode(node *currentFolder, char* name, enum nodeType type);
 node* getNodeTypeless(node *currentFolder, char* name);
 
+// Function to read and display the contents of a file
+void echo(node* currentFolder, char* fileName, node* root);
+
 // Function to display coloful nodes
 void displayNode(node* item);
 
@@ -179,6 +182,46 @@ node* parsePath(node* currentFolder, char* path, node* root) {
     }
 
     return currentFolder;
+}
+
+
+// Function to read and display the contents of a file
+void echo(node* currentFolder, char* fileName,  node* root) {
+    // Find the node with the given file name in the current folder
+    node* targetNode = getNodeTypeless(currentFolder, fileName);
+    if (targetNode == NULL) {
+        printf("Error: File '%s' not found.\n", fileName);
+        return;
+    }
+
+    // If the node is a symlink, resolve it to its target
+    if (targetNode->type == Symlink) {
+        char* targetPath = targetNode->symlinkTarget;
+        printf("Following symlink '%s' -> '%s'\n", fileName, targetPath);
+        targetNode = parsePath(currentFolder, targetPath, root); // Resolve to the target node
+        if (targetNode == NULL) {
+            printf("Error: Target of symlink '%s' not found.\n", fileName);
+            return;
+        }
+    }
+
+    // If the node is a file, read and print its contents
+    if (targetNode->type == File) {
+        FILE* file = fopen(targetNode->name, "r");
+        if (file == NULL) {
+            printf("Error: Could not open file '%s'.\n", targetNode->name);
+            return;
+        }
+
+        char buffer[256];
+        while (fgets(buffer, sizeof(buffer), file) != NULL) {
+            printf("%s", buffer);
+        }
+
+        fclose(file);
+    } else {
+        printf("Error: '%s' is not a file.\n", fileName);
+    }
 }
 
 
@@ -1333,6 +1376,13 @@ int main() {
             rm(currentFolder, command);
         } else if (strncmp(command, "mov", 3) == 0) {
             mov(currentFolder, command);
+        } else if (strncmp(command, "echo", 4) == 0) {
+            char* fileName = strtok(command + 5, " ");
+            if (fileName) {
+                echo(currentFolder, fileName, root);
+            } else {
+                printf("Error: No file name provided. Usage: echo <fileName>\n");
+            }
         } else if (strcmp(command, "count") == 0) {
             int fileCount = countFiles(currentFolder);
             int folderCount = countFolders(currentFolder);
