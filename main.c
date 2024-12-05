@@ -41,7 +41,7 @@ void edit(node* currentFolder, char* command);
 void pwd(char* path);
 
 // Function to change the current directory
-node* cd(node* currentFolder, char* command, char** path);
+node* cd(node* currentFolder, char* command, char** path, node *root);
 
 // Function to move up to the parent directory
 node* cdup(node* currentFolder, char** path);
@@ -81,6 +81,9 @@ void compressDirectory(node* folder, const char* filename);
 
 // Function to decompress a file and restore the directory structure
 node* decompressDirectory(const char* filename);
+
+// Function to get a node
+node* getNode(node *currentFolder, char* name, enum nodeType type);
 
 
 char* getString() {
@@ -789,43 +792,65 @@ void pwd(char *path) {
     }
 }
 
-node* cd(node *currentFolder, char *command, char **path) {
-
+node* cd(node *currentFolder, char *command, char **path, node *root) {
     if (strtok(command, " ") != NULL) {
-        char* folderName = strtok(NULL, " ");
-        if (folderName != NULL) {
-
-            // Navigate to root explicitly
-            if (strcmp(folderName, "/") == 0) {
+        char* targetPath = strtok(NULL, " ");
+        if (targetPath != NULL) {
+            // Check if the path is absolute
+            if (targetPath[0] == '/') {
+                // Navigate to root explicitly for absolute paths
+                currentFolder = root;
                 *path = realloc(*path, sizeof(char) * 2);
                 strcpy(*path, "/");
-                while (currentFolder->parent != NULL) {
-                    currentFolder = currentFolder->parent; // Navigate up to the actual root
-                }
-                return currentFolder; // Assuming currentFolder is root when "cd /" is called
+                targetPath++; // Skip the initial '/'
             }
 
-            node *destinationFolder = getNode(currentFolder, folderName, Folder);
+            // Tokenize the path and navigate step-by-step
+            char* token = strtok(targetPath, "/");
+            while (token != NULL) {
+                if (strcmp(token, "..") == 0) {
+                    // Navigate to the parent directory
+                    if (currentFolder->parent != NULL) {
+                        currentFolder = currentFolder->parent;
+                        // Update the path
+                        char* lastSlash = strrchr(*path, '/');
+                        if (lastSlash && lastSlash != *path) {
+                            *lastSlash = '\0';
+                        } else {
+                            strcpy(*path, "/");
+                        }
+                    } else {
+                        printf("Already at the root directory.\n");
+                    }
+                } else if (strcmp(token, ".") == 0) {
+                    // Stay in the current directory (no-op)
+                } else {
+                    // Navigate to a child directory
+                    node* destinationFolder = getNode(currentFolder, token, Folder);
+                    if (destinationFolder != NULL) {
+                        currentFolder = destinationFolder;
 
-            if ( destinationFolder != NULL) {
+                        // Update the path
+                        size_t newPathLength = strlen(*path) + strlen(destinationFolder->name) + 2;
+                        *path = realloc(*path, sizeof(char) * newPathLength);
+                        if (strcmp(*path, "/") == 0) {
+                            strcat(*path, token);
+                        } else {
+                            strcat(strcat(*path, "/"), token);
+                        }
+                    } else {
+                        fprintf(stderr, "There is no '%s' folder in the current directory!\n", token);
+                        return currentFolder;
+                    }
+                }
 
-                size_t newPathLength = strlen(*path) + strlen(destinationFolder->name) + 2;
-
-                *path = (char *) realloc(*path, sizeof(char)* newPathLength);
-
-                strcat(strcat(*path, destinationFolder->name), "/");
-
-                return destinationFolder;
-            } else {
-                fprintf(stderr, "There is no '%s' folder in current directory!\n",  folderName);
-                return currentFolder;
+                token = strtok(NULL, "/");
             }
         } else {
-            return currentFolder;
+            printf("Error: No path provided.\n");
         }
-    } else {
-        return currentFolder;
     }
+    return currentFolder;
 }
 
 node* cdup(node *currentFolder, char **path) {
@@ -1224,8 +1249,8 @@ int main() {
             pwd(path);
         } else if (strcmp(command, "cdup") == 0) {
             currentFolder = cdup(currentFolder, &path);
-        } else if (strncmp(command, "cd", 2) == 0){
-            currentFolder = cd(currentFolder, command, &path);
+        } else if (strncmp(command, "cd", 2) == 0) {
+            currentFolder = cd(currentFolder, command, &path, root);
         } else if (strncmp(command, "rm", 2) == 0) {
             rm(currentFolder, command);
         } else if (strncmp(command, "mov", 3) == 0) {
