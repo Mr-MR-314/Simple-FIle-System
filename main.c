@@ -1212,47 +1212,52 @@ void displayPrompt(const char* path) {
     printf("┌──[%s%s%s]\n└─%s>%s ", BLUE, path, RESET, GREEN, RESET);
 }
 
-// Function to enable raw mode for real-time input
-void enableRawMode() {
-    struct termios raw;
-    tcgetattr(STDIN_FILENO, &raw);
-    raw.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echo
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
+// [Not Working] 
+// // Function to enable raw mode for real-time input
+// void enableRawMode() {
+//     struct termios raw;
+//     tcgetattr(STDIN_FILENO, &raw);
+//     raw.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echo
+//     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+// }
 
-// Function to restore the terminal to default mode
-void disableRawMode() {
-    struct termios raw;
-    tcgetattr(STDIN_FILENO, &raw);
-    raw.c_lflag |= (ICANON | ECHO); // Enable canonical mode and echo
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
+// // Function to restore the terminal to default mode
+// void disableRawMode() {
+//     struct termios raw;
+//     tcgetattr(STDIN_FILENO, &raw);
+//     raw.c_lflag |= (ICANON | ECHO); // Enable canonical mode and echo
+//     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+// }
 
-// Function to read input in real-time with yellow color
-char* getRealTimeInput() {
-    const char* YELLOW = "\033[33m"; // ANSI code for yellow
-    const char* RESET = "\033[0m";   // Reset color
+// // [Not Working] Function to read input in real-time with yellow color
+// char* getRealTimeInput() {
+//     enableRawMode();
 
-    enableRawMode();
+//     char* input = malloc(1024);
+//     size_t length = 0;
 
-    char* input = malloc(1024);
-    size_t length = 0;
+//     printf("%s", YELLOW); // Set input color to yellow
 
-    printf("%s", YELLOW); // Set input color to yellow
+//     char c;
+//     while (read(STDIN_FILENO, &c, 1) == 1 && c != '\n') {
+//         if (c == 127) { // Handle backspace
+//             if (length > 0) {
+//                 length--;
+//                 printf("\b \b"); // Move cursor back and overwrite character
+//             }
+//         } else {
+//             input[length++] = c;
+//             printf("%c", c); // Print each character as it's typed
+//         }
+//     }
 
-    char c;
-    while (read(STDIN_FILENO, &c, 1) == 1 && c != '\n') {
-        input[length++] = c;
-        printf("%c", c); // Print each character as it's typed
-    }
+//     input[length] = '\0'; // Null-terminate the input
+//     printf("%s\n", RESET); // Reset color and print newline
 
-    input[length] = '\0'; // Null-terminate the input
-    printf("%s\n", RESET); // Reset color and print newline
+//     disableRawMode();
 
-    disableRawMode();
-
-    return input;
-}
+//     return input;
+// }
 
 void displayNode(node* item) {
     if (item->type == File) {
@@ -1263,7 +1268,6 @@ void displayNode(node* item) {
         printf("%s%s@%s\n", BLUE, item->name, RESET);
     }
 }
-
 
 
 int main() {
@@ -1291,9 +1295,10 @@ int main() {
     while (1) {
 
         displayPrompt(path);
-        // char *command = getString();
+        char *command = getString();
 
-        char *command = getRealTimeInput();
+        // [Not Working] 
+        // char *command = getRealTimeInput();
 
         if (strncmp(command, "mkdir", 5) == 0) {
             make_dir(currentFolder, command);
