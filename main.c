@@ -133,6 +133,42 @@ int countFolders(node* folder) {
     return count;
 }
 
+node* parsePath(node* currentFolder, char* path, node* root) {
+    // Handle absolute path
+    if (path[0] == '/') {
+        currentFolder = root;
+        path++; // Skip the initial '/'
+    }
+
+    char* token = strtok(path, "/");
+    while (token) {
+        if (strcmp(token, "..") == 0) {
+            // Move to the parent directory
+            if (currentFolder->parent) {
+                currentFolder = currentFolder->parent;
+            } else {
+                printf("Already at the root directory.\n");
+            }
+        } else if (strcmp(token, ".") == 0) {
+            // Stay in the current directory
+            // Do nothing
+        } else {
+            // Move to a child directory
+            node* nextFolder = getNode(currentFolder, token, Folder);
+            if (nextFolder) {
+                currentFolder = nextFolder;
+            } else {
+                printf("Error: Directory '%s' not found.\n", token);
+                return NULL;
+            }
+        }
+        token = strtok(NULL, "/");
+    }
+
+    return currentFolder;
+}
+
+
 void saveDirectoryToFile(node* folder, FILE* file, int depth) {
     if (!folder) return;
 
