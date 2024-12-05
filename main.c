@@ -31,10 +31,10 @@ typedef struct node {
 } node;
 
 // Function to create a new folder in the current directory
-void make_dir(node* currentFolder, char* command);
+void make_dir(node* currentFolder, char* command, char* currentPath);
 
 // Function to create a new file in the current directory
-void touch(node* currentFolder, char* command);
+void touch(node* currentFolder, char* command, char* currentPath);
 
 // Function to list files and folders in the current directory
 void ls(node* currentFolder);
@@ -148,6 +148,31 @@ int countFolders(node* folder) {
         currentNode = currentNode->next;
     }
     return count;
+}
+
+void getRealPath(node* currentFolder, char* realPath) {
+    // Temporary buffer to build the path
+    char tempPath[1024] = "";
+    node* folder = currentFolder;
+
+    while (folder != NULL && strcmp(folder->name, "/") != 0) {
+        // Prepend the current folder's name
+        char buffer[256];
+        snprintf(buffer, sizeof(buffer), "/%s", folder->name);
+        strcat(tempPath, buffer);
+
+        // Move to the parent folder
+        folder = folder->parent;
+    }
+
+    // Start from root if the current folder is the root node
+    if (folder == NULL) {
+        snprintf(realPath, 1024, "/");
+    } else {
+        // Reverse the constructed path to get the correct real path
+        snprintf(realPath, 1024, ".");
+        strncat(realPath, tempPath, 1024 - strlen(realPath) - 1);
+    }
 }
 
 node* parsePath(node* currentFolder, char* path, node* root) {
@@ -516,6 +541,7 @@ void renameNode(node* currentNode, const char* newName) {
     printf("Renamed to '%s'\n", currentNode->name);
 }
 
+
 // Week 3: Display Full Path
 void displayFullPath(node* currentNode) {
     if (!currentNode) return;
@@ -568,22 +594,20 @@ node* getNodeTypeless(node *currentFolder, char* name) {
     } else return NULL;
 }
 
-void make_dir(node *currentFolder, char *command) {
+void make_dir(node* currentFolder, char* command) {
     if (strtok(command, " ") != NULL) {
         char* folderName = strtok(NULL, " ");
         if (folderName != NULL) {
+            // Check if the folder already exists in the virtual tree
             if (getNodeTypeless(currentFolder, folderName) == NULL) {
-
+                // Create the folder in the virtual file system
                 currentFolder->numberOfItems++;
-                node *newFolder = (node*) malloc(sizeof(node));
-
+                node* newFolder = (node*)malloc(sizeof(node));
                 if (currentFolder->child == NULL) {
                     currentFolder->child = newFolder;
                     newFolder->previous = NULL;
                 } else {
-
-                    node *currentNode = currentFolder->child;
-
+                    node* currentNode = currentFolder->child;
                     while (currentNode->next != NULL) {
                         currentNode = currentNode->next;
                     }
@@ -591,9 +615,7 @@ void make_dir(node *currentFolder, char *command) {
                     newFolder->previous = currentNode;
                 }
 
-                char* newFolderName = (char*) malloc(sizeof(char)*(strlen(folderName)+1));
-                strcpy(newFolderName, folderName);
-
+                char* newFolderName = strdup(folderName);
                 newFolder->name = newFolderName;
                 newFolder->type = Folder;
                 newFolder->numberOfItems = 0;
@@ -604,67 +626,40 @@ void make_dir(node *currentFolder, char *command) {
                 newFolder->next = NULL;
                 newFolder->child = NULL;
 
-                printf("Folder '%s' added\n", newFolder->name);
+                printf("Folder '%s' added to the virtual filesystem.\n", newFolder->name);
 
-                // Create the real folder
-                char path[1024];
-                snprintf(path, sizeof(path), "./%s/%s", currentFolder->name, folderName);
-                if (mkdir(path, 0755) == 0) {
-                    printf("Folder '%s' created in the real filesystem.\n", path);
+                // Get the real path and create the folder in the real file system
+                char realPath[1024];
+                getRealPath(currentFolder, realPath);
+                char fullPath[1024];
+                snprintf(fullPath, sizeof(fullPath), "%s/%s", realPath, folderName);
+
+                if (mkdir(fullPath, 0755) == 0) {
+                    printf("Folder '%s' created in the real filesystem.\n", fullPath);
                 } else {
                     perror("Error creating folder in the real filesystem");
                 }
-                } else {
-                    fprintf(stderr, "'%s' is already exist in current directory!\n",  folderName);
-                }
+            } else {
+                fprintf(stderr, "'%s' already exists in the current directory!\n", folderName);
+            }
         }
     }
 }
 
-void touch(node *currentFolder, char *command) {
-
+void touch(node* currentFolder, char* command) {
     if (strtok(command, " ") != NULL) {
-        char *fileName = strtok(NULL, " ");
+        char* fileName = strtok(NULL, " ");
         if (fileName != NULL) {
-            node* existing = getNodeTypeless(currentFolder, fileName);
-            if (existing) {
-                printf("Conflict detected: %s already exists. Choose an option:\n", fileName);
-                printf("1. Skip\n2. Rename\n3. Overwrite\n");
-                int choice;
-                scanf("%d", &choice);
-                getchar(); // Consume the newline character
-
-                if (choice == 1) {
-                    printf("Skipping %s\n", fileName);
-                    return;
-                } else if (choice == 2) {
-                    char newName[256];
-                    printf("Enter a new name for %s: ", fileName);
-                    fgets(newName, sizeof(newName), stdin);
-                    newName[strcspn(newName, "\n")] = '\0'; // Remove newline
-                    fileName = strdup(newName);
-                    printf("Renamed to %s\n", fileName);
-                } else if (choice == 3) {
-                    printf("Overwriting %s\n", fileName);
-                    removeNode(existing); // Remove the existing file
-                } else {
-                    printf("Invalid choice. Skipping %s.\n", fileName);
-                    return;
-                }
-            }
-            else if (existing == NULL){
-
+            // Check if the file already exists in the virtual tree
+            if (getNodeTypeless(currentFolder, fileName) == NULL) {
+                // Create the file in the virtual file system
                 currentFolder->numberOfItems++;
-
-                node *newFile = (node *) malloc(sizeof(node));
-
+                node* newFile = (node*)malloc(sizeof(node));
                 if (currentFolder->child == NULL) {
                     currentFolder->child = newFile;
                     newFile->previous = NULL;
                 } else {
-
-                    node *currentNode = currentFolder->child;
-
+                    node* currentNode = currentFolder->child;
                     while (currentNode->next != NULL) {
                         currentNode = currentNode->next;
                     }
@@ -672,9 +667,7 @@ void touch(node *currentFolder, char *command) {
                     newFile->previous = currentNode;
                 }
 
-                char* newFileName = (char*) malloc(sizeof(char)*(strlen(fileName)+1));
-                strcpy(newFileName, fileName);
-
+                char* newFileName = strdup(fileName);
                 newFile->name = newFileName;
                 newFile->type = File;
                 newFile->numberOfItems = 0;
@@ -685,20 +678,23 @@ void touch(node *currentFolder, char *command) {
                 newFile->next = NULL;
                 newFile->child = NULL;
 
-                printf("File '%s' added\n", newFile->name);
+                printf("File '%s' added to the virtual filesystem.\n", newFile->name);
 
-                // Create the real file
-                char path[1024];
-                snprintf(path, sizeof(path), "./%s/%s", currentFolder->name, fileName);
-                FILE* file = fopen(path, "w");
+                // Get the real path and create the file in the real file system
+                char realPath[1024];
+                getRealPath(currentFolder, realPath);
+                char fullPath[1024];
+                snprintf(fullPath, sizeof(fullPath), "%s/%s", realPath, fileName);
+
+                FILE* file = fopen(fullPath, "w");
                 if (file) {
                     fclose(file);
-                    printf("File '%s' created in the real filesystem.\n", path);
+                    printf("File '%s' created in the real filesystem.\n", fullPath);
                 } else {
-                    printf("Error: Could not create file '%s'.\n", path);
+                    printf("Error: Could not create file '%s'.\n", fullPath);
                 }
             } else {
-                fprintf(stderr, "'%s' is already exist in current directory!\n", fileName);
+                fprintf(stderr, "'%s' already exists in the current directory!\n", fileName);
             }
         }
     }
@@ -1355,9 +1351,9 @@ int main() {
         // char *command = getRealTimeInput();
 
         if (strncmp(command, "mkdir", 5) == 0) {
-            make_dir(currentFolder, command);
+            make_dir(currentFolder, command, path); // Pass the full path
         } else if (strncmp(command, "touch", 5) == 0) {
-            touch(currentFolder, command);
+            touch(currentFolder, command, path); // Pass the full path
         } else if (strcmp(command, "ls") == 0) {
             ls(currentFolder);
         } else if (strcmp(command, "lsrecursive") == 0) {
