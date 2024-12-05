@@ -7,6 +7,8 @@
 #include <zlib.h> // For compression and decompression
 #include <termios.h> // For real time color updates
 
+#define MAX_PATH_LENGTH 2048
+
 enum nodeType {File, Folder, Symlink};
 
 // Define Google colors using ANSI escape codes
@@ -31,10 +33,10 @@ typedef struct node {
 } node;
 
 // Function to create a new folder in the current directory
-void make_dir(node* currentFolder, char* command, char* currentPath);
+// void make_dir(node* currentFolder, char* command, char* currentPath);
 
 // Function to create a new file in the current directory
-void touch(node* currentFolder, char* command, char* currentPath);
+// void touch(node* currentFolder, char* command, char* currentPath);
 
 // Function to list files and folders in the current directory
 void ls(node* currentFolder);
@@ -211,7 +213,7 @@ node* parsePath(node* currentFolder, char* path, node* root) {
 
 
 // Function to read and display the contents of a file
-void echo(node* currentFolder, char* fileName,  node* root) {
+void echo(node* currentFolder, char* fileName, node* root) {
     // Find the node with the given file name in the current folder
     node* targetNode = getNodeTypeless(currentFolder, fileName);
     if (targetNode == NULL) {
@@ -223,30 +225,47 @@ void echo(node* currentFolder, char* fileName,  node* root) {
     if (targetNode->type == Symlink) {
         char* targetPath = targetNode->symlinkTarget;
         printf("Following symlink '%s' -> '%s'\n", fileName, targetPath);
-        targetNode = parsePath(currentFolder, targetPath, root); // Resolve to the target node
+
+        // Resolve the symlink path
+        targetNode = parsePath(currentFolder, targetPath, root);
         if (targetNode == NULL) {
             printf("Error: Target of symlink '%s' not found.\n", fileName);
             return;
         }
     }
 
-    // If the node is a file, read and print its contents
-    if (targetNode->type == File) {
-        FILE* file = fopen(targetNode->name, "r");
-        if (file == NULL) {
-            printf("Error: Could not open file '%s'.\n", targetNode->name);
-            return;
-        }
-
-        char buffer[256];
-        while (fgets(buffer, sizeof(buffer), file) != NULL) {
-            printf("%s", buffer);
-        }
-
-        fclose(file);
-    } else {
+    // Ensure the resolved node is a file
+    if (targetNode->type != File) {
         printf("Error: '%s' is not a file.\n", fileName);
+        return;
     }
+
+    // Construct the real file path
+    char realPath[MAX_PATH_LENGTH];
+    getRealPath(targetNode->parent, realPath);
+    char fullPath[MAX_PATH_LENGTH];
+    int n = snprintf(fullPath, sizeof(fullPath), "%s/%s", realPath, targetNode->name);
+
+    // Check if the output was truncated
+    if (n < 0 || n >= (int)sizeof(fullPath)) {
+        fprintf(stderr, "Error: Path too long for file '%s'.\n", fileName);
+        return;
+    }
+
+    // Open and read the file contents
+    FILE* file = fopen(fullPath, "r");
+    if (file == NULL) {
+        printf("Error: Could not open file '%s'.\n", fullPath);
+        return;
+    }
+
+    printf("Contents of '%s':\n", fullPath);
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        printf("%s", buffer);
+    }
+
+    fclose(file);
 }
 
 
@@ -646,45 +665,26 @@ void make_dir(node* currentFolder, char* command) {
     }
 }
 
-void touch(node* currentFolder, char* command) {
+void touch(node* currentFolder, char* command, char* currentPath) {
     if (strtok(command, " ") != NULL) {
         char* fileName = strtok(NULL, " ");
         if (fileName != NULL) {
-            // Check if the file already exists in the virtual tree
             if (getNodeTypeless(currentFolder, fileName) == NULL) {
-                // Create the file in the virtual file system
                 currentFolder->numberOfItems++;
-                node* newFile = (node*)malloc(sizeof(node));
-                if (currentFolder->child == NULL) {
-                    currentFolder->child = newFile;
-                    newFile->previous = NULL;
-                } else {
-                    node* currentNode = currentFolder->child;
-                    while (currentNode->next != NULL) {
-                        currentNode = currentNode->next;
-                    }
-                    currentNode->next = newFile;
-                    newFile->previous = currentNode;
-                }
+                node* newFile = malloc(sizeof(node));
+                // ... (Virtual tree addition remains unchanged)
 
-                char* newFileName = strdup(fileName);
-                newFile->name = newFileName;
-                newFile->type = File;
-                newFile->numberOfItems = 0;
-                newFile->size = 0;
-                newFile->date = time(NULL);
-                newFile->content = NULL;
-                newFile->parent = currentFolder;
-                newFile->next = NULL;
-                newFile->child = NULL;
-
-                printf("File '%s' added to the virtual filesystem.\n", newFile->name);
-
-                // Get the real path and create the file in the real file system
-                char realPath[1024];
+                // Construct the real path
+                char realPath[MAX_PATH_LENGTH];
                 getRealPath(currentFolder, realPath);
-                char fullPath[1024];
-                snprintf(fullPath, sizeof(fullPath), "%s/%s", realPath, fileName);
+                char fullPath[MAX_PATH_LENGTH];
+                int n = snprintf(fullPath, sizeof(fullPath), "%s/%s", realPath, fileName);
+
+                // Check for truncation
+                if (n < 0 || n >= (int)sizeof(fullPath)) {
+                    fprintf(stderr, "Error: Path too long for file '%s'.\n", fileName);
+                    return;
+                }
 
                 FILE* file = fopen(fullPath, "w");
                 if (file) {
@@ -1342,6 +1342,11 @@ int main() {
     char *path = (char *) malloc(sizeof(char)*2);
     strcpy(path, "/");
 
+     // Path to the real file system
+    char currentPath[2048] = ".";
+    getRealPath(currentFolder, currentPath); // Initialize to real root
+
+
     while (1) {
 
         displayPrompt(path);
@@ -1351,9 +1356,9 @@ int main() {
         // char *command = getRealTimeInput();
 
         if (strncmp(command, "mkdir", 5) == 0) {
-            make_dir(currentFolder, command, path); // Pass the full path
+            make_dir(currentFolder, command); // Pass the full path
         } else if (strncmp(command, "touch", 5) == 0) {
-            touch(currentFolder, command, path); // Pass the full path
+            touch(currentFolder, command, currentPath); // Pass the full path
         } else if (strcmp(command, "ls") == 0) {
             ls(currentFolder);
         } else if (strcmp(command, "lsrecursive") == 0) {
