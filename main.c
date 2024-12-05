@@ -5,13 +5,16 @@
 #include <sys/time.h>
 #include <time.h>
 #include <zlib.h> // For compression and decompression
+#include <termios.h> // For real time color updates
 
 enum nodeType {File, Folder, Symlink};
 
-    // Define Google colors using ANSI escape codes
-    const char* BLUE = "\033[38;5;33m";  // Google Blue
-    const char* GREEN = "\033[38;5;46m"; // Google Green
-    const char* RESET = "\033[0m";       // Reset to default
+// Define Google colors using ANSI escape codes
+const char* YELLOW = "\033[38;5;226m"; // Google Yellow
+const char* CYAN = "\033[36m";         // Cyan for folders
+const char* BLUE = "\033[38;5;33m";    // Google Blue for symlinks
+const char* GREEN = "\033[38;5;46m"; // Google Green
+const char* RESET = "\033[0m";       // Reset to default
 
 typedef struct node {
     enum nodeType type;
@@ -90,6 +93,8 @@ node* decompressDirectory(const char* filename);
 // Function to get a node
 node* getNode(node *currentFolder, char* name, enum nodeType type);
 
+// Function to display coloful nodes
+void displayNode(node* item);
 
 char* getString() {
     size_t size = 10;
@@ -659,90 +664,75 @@ void touch(node *currentFolder, char *command) {
 void ls(node *currentFolder) {
     if (currentFolder->child == NULL) {
         printf("___Empty____\n");
-    } else {
+        return;
+    }
 
-        node *currentNode = currentFolder->child;
+    node *currentNode = currentFolder->child;
 
-        while (currentNode->next != NULL) {
-
-            struct tm *date_time = localtime(&currentNode->date);
-            char dateString[26];
-            strftime(dateString, 26, "%d %b %H:%M", date_time);
-
-            if (currentNode->type == Folder) {
-                printf("%d items\t%s\t%s\n", currentNode->numberOfItems, dateString, currentNode->name);
-            } else {
-                printf("%dB\t%s\t%s\n", (int)currentNode->size, dateString, currentNode->name);
-            }
-
-            currentNode = currentNode->next;
-        }
-
+    while (currentNode != NULL) {
         struct tm *date_time = localtime(&currentNode->date);
         char dateString[26];
         strftime(dateString, 26, "%d %b %H:%M", date_time);
 
         if (currentNode->type == Folder) {
-            printf("%d items\t%s\t%s\n", currentNode->numberOfItems, dateString, currentNode->name);
-        } else {
-            printf("%dB\t%s\t%s\n", (int)currentNode->size, dateString, currentNode->name);
+            printf("%s%d items\t%s\t%s/%s\n", CYAN, currentNode->numberOfItems, dateString, currentNode->name, RESET);
+        } else if (currentNode->type == File) {
+            printf("%s%dB\t%s\t%s%s\n", YELLOW, (int)currentNode->size, dateString, currentNode->name, RESET);
+        } else if (currentNode->type == Symlink) {
+            printf("%s\t%s\t%s%s\n", BLUE, dateString, currentNode->name, RESET);
         }
+
+        currentNode = currentNode->next;
     }
 }
 
-void lsrecursive(node *currentFolder, int indentCount) {
 
+void lsrecursive(node *currentFolder, int indentCount) {
     if (currentFolder->child == NULL) {
         for (int i = 0; i < indentCount; ++i) {
             printf("\t");
         }
-        if (indentCount != 0 ) {
+        if (indentCount != 0) {
             printf("└─");
         }
         printf("___Empty____\n");
     } else {
+        const char* YELLOW = "\033[38;5;226m"; // Google Yellow for files
+        const char* CYAN = "\033[36m";         // Cyan for folders
+        const char* BLUE = "\033[38;5;33m";    // Google Blue for symlinks
+        const char* RESET = "\033[0m";         // Reset color
 
         node *currentNode = currentFolder->child;
 
-        while (currentNode->next != NULL) {
-
+        while (currentNode != NULL) {
             for (int i = 0; i < indentCount; ++i) {
                 printf("\t");
             }
-            if (indentCount != 0 ) {
-                printf("|_");
+            if (indentCount != 0) {
+                printf("└─");
             }
+
             struct tm *date_time = localtime(&currentNode->date);
             char dateString[26];
             strftime(dateString, 26, "%d %b %H:%M", date_time);
 
             if (currentNode->type == Folder) {
-                printf("%d items\t%s\t%s\n", currentNode->numberOfItems, dateString, currentNode->name);
-            } else {
-                printf("%dB\t%s\t%s\n", (int)currentNode->size, dateString, currentNode->name);
+                // Print folder with cyan color
+                printf("%s%d items\t%s\t%s%s\n", CYAN, currentNode->numberOfItems, dateString, currentNode->name, RESET);
+            } else if (currentNode->type == File) {
+                // Print file with yellow color
+                printf("%s%dB\t%s\t%s%s\n", YELLOW, (int)currentNode->size, dateString, currentNode->name, RESET);
+            } else if (currentNode->type == Symlink) {
+                // Print symlink with blue color
+                printf("%s\t%s\t%s%s\n", BLUE, dateString, currentNode->name, RESET);
             }
-            if (currentNode->type == Folder){
-                lsrecursive(currentNode, indentCount+1);
-            }
-            currentNode = currentNode->next;
-        }
-        for (int i = 0; i < indentCount; ++i) {
-            printf("\t");
-        }
-        if (indentCount != 0 ) {
-            printf("|_");
-        }
-        struct tm *date_time = localtime(&currentNode->date);
-        char dateString[26];
-        strftime(dateString, 26, "%d %b %H:%M", date_time);
 
-        if (currentNode->type == Folder) {
-            printf("%d items\t%s\t%s\n", currentNode->numberOfItems, dateString, currentNode->name);
-        } else {
-            printf("%dB\t%s\t%s\n", (int)currentNode->size, dateString, currentNode->name);
-        }
-        if (currentNode->type == Folder){
-            lsrecursive(currentNode, indentCount+1);
+            // Recursively call lsrecursive for child folders
+            if (currentNode->type == Folder) {
+                lsrecursive(currentNode, indentCount + 1);
+            }
+
+            currentNode = currentNode->next;
         }
     }
 }
@@ -1222,6 +1212,59 @@ void displayPrompt(const char* path) {
     printf("┌──[%s%s%s]\n└─%s>%s ", BLUE, path, RESET, GREEN, RESET);
 }
 
+// Function to enable raw mode for real-time input
+void enableRawMode() {
+    struct termios raw;
+    tcgetattr(STDIN_FILENO, &raw);
+    raw.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echo
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+// Function to restore the terminal to default mode
+void disableRawMode() {
+    struct termios raw;
+    tcgetattr(STDIN_FILENO, &raw);
+    raw.c_lflag |= (ICANON | ECHO); // Enable canonical mode and echo
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+// Function to read input in real-time with yellow color
+char* getRealTimeInput() {
+    const char* YELLOW = "\033[33m"; // ANSI code for yellow
+    const char* RESET = "\033[0m";   // Reset color
+
+    enableRawMode();
+
+    char* input = malloc(1024);
+    size_t length = 0;
+
+    printf("%s", YELLOW); // Set input color to yellow
+
+    char c;
+    while (read(STDIN_FILENO, &c, 1) == 1 && c != '\n') {
+        input[length++] = c;
+        printf("%c", c); // Print each character as it's typed
+    }
+
+    input[length] = '\0'; // Null-terminate the input
+    printf("%s\n", RESET); // Reset color and print newline
+
+    disableRawMode();
+
+    return input;
+}
+
+void displayNode(node* item) {
+    if (item->type == File) {
+        printf("%s%s%s\n", YELLOW, item->name, RESET);
+    } else if (item->type == Folder) {
+        printf("%s%s/%s\n", CYAN, item->name, RESET);
+    } else if (item->type == Symlink) {
+        printf("%s%s@%s\n", BLUE, item->name, RESET);
+    }
+}
+
+
 
 int main() {
 
@@ -1248,7 +1291,9 @@ int main() {
     while (1) {
 
         displayPrompt(path);
-        char *command = getString();
+        // char *command = getString();
+
+        char *command = getRealTimeInput();
 
         if (strncmp(command, "mkdir", 5) == 0) {
             make_dir(currentFolder, command);
