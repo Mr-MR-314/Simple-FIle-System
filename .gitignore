@@ -1,52 +1,47 @@
-# Prerequisites
-*.d
-
-# Object files
+# Compiled object files
 *.o
-*.ko
 *.obj
-*.elf
 
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
+# Compiled binary files
 *.exe
 *.out
 *.app
-*.i*86
-*.x86_64
-*.hex
 
-# Debug files
+# Build directories
+build/
+bin/
+obj/
+test_dir/
+
+# Test directories
+test/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Backup files
+*~
+*.bak
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+
+# CMake files (if using CMake)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Generated files from tools like autoconf/automake
+Makefile.in
+Makefile.am
+
+# Other generated files
 *.dSYM/
-*.su
-*.idb
-*.pdb
+*.class
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Ignore the .gitignore file itself if needed (optional)
+# .gitignore
