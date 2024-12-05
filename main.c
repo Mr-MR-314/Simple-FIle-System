@@ -79,7 +79,7 @@ int countFiles(node* folder);
 void mergeDirectories(node* destFolder, node* srcFolder);
 
 // Function to create a symbolic link to an existing file or folder
-void createSymlink(node* currentFolder, char* target, char* linkName);
+int createSymlink(node* currentFolder, char* sourcePath, char* linkName, node* root);
 
 // Function to sort files and folders in the current directory by name or date
 void sortDirectory(node* folder, const char* criterion);
@@ -167,7 +167,7 @@ node* parsePath(node* currentFolder, char* path, node* root) {
             // Do nothing
         } else {
             // Move to a child directory
-            node* nextFolder = getNode(currentFolder, token, Folder);
+            node* nextFolder = getNode(currentFolder, token, -1); // Check for any type (folder/file)
             if (nextFolder) {
                 currentFolder = nextFolder;
             } else {
@@ -1115,39 +1115,50 @@ void mergeDirectories(node* destFolder, node* srcFolder) {
 }
 
 // Handle symbolic links
-void createSymlink(node* currentFolder, char* target, char* linkName) {
-    if (!currentFolder) return;
-
-    node* targetNode = getNodeTypeless(currentFolder, target);
-    if (!targetNode) {
-        printf("Target not found: %s\n", target);
-        return;
+int createSymlink(node* currentFolder, char* sourcePath, char* linkName, node* root) {
+    // Use parsePath to find the target node
+    node* sourceNode = parsePath(currentFolder, sourcePath, root);
+    if (sourceNode == NULL) {
+        printf("Error: Source '%s' not found.\n", sourcePath);
+        return -1;
     }
 
-    if (getNodeTypeless(currentFolder, linkName)) {
-        printf("Conflict: Symlink name already exists: %s\n", linkName);
-        return;
+    // Check if a node with the linkName already exists in the current folder
+    node* existingNode = getNode(currentFolder, linkName, -1); // Check for any type
+    if (existingNode != NULL) {
+        printf("Error: A node with the name '%s' already exists.\n", linkName);
+        return -1;
     }
 
-    node* symlinkNode = malloc(sizeof(node));
-    symlinkNode->type = Symlink;
-    symlinkNode->name = strdup(linkName);
-    symlinkNode->symlinkTarget = strdup(target);
-    symlinkNode->parent = currentFolder;
-    symlinkNode->next = symlinkNode->child = NULL;
-    symlinkNode->previous = NULL;
+    // Create the new symlink node
+    node* newLink = malloc(sizeof(node));
+    if (!newLink) {
+        printf("Error: Memory allocation failed.\n");
+        return -1;
+    }
 
-    // Add symlink to the directory
+    newLink->type = Symlink;
+    newLink->name = strdup(linkName);
+    newLink->symlinkTarget = strdup(sourcePath); // Store the target path as a string
+    newLink->size = 0; // Size for symlinks can be 0 as it points to another node
+    newLink->date = time(NULL); // Set current time as the creation date
+    newLink->child = NULL;
+    newLink->next = NULL;
+    newLink->parent = currentFolder;
+
+    // Add the new symlink to the current folder's child list
     if (currentFolder->child == NULL) {
-        currentFolder->child = symlinkNode;
+        currentFolder->child = newLink;
     } else {
-        node* last = currentFolder->child;
-        while (last->next) last = last->next;
-        last->next = symlinkNode;
-        symlinkNode->previous = last;
+        node* lastChild = currentFolder->child;
+        while (lastChild->next != NULL) {
+            lastChild = lastChild->next;
+        }
+        lastChild->next = newLink;
     }
 
-    printf("Symbolic link '%s' -> '%s' created.\n", linkName, target);
+    printf("Symbolic link '%s' -> '%s' created.\n", linkName, sourcePath);
+    return 0;
 }
 
 // Compression (using zlib)
@@ -1410,10 +1421,12 @@ int main() {
                 }
             }
         } else if (strncmp(command, "symlink", 7) == 0) {
-            char* target = strtok(command + 8, " ");
+            char* sourcePath = strtok(command + 8, " ");
             char* linkName = strtok(NULL, " ");
-            if (target && linkName) {
-                createSymlink(currentFolder, target, linkName);
+            if (sourcePath && linkName) {
+                createSymlink(currentFolder, sourcePath, linkName, root);
+            } else {
+                printf("Error: Invalid arguments. Usage: symlink <source> <linkName>\n");
             }
         } else if (strncmp(command, "sortBy", 6) == 0) {
             char* criterion = strtok(command + 7, " ");
