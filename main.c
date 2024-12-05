@@ -763,6 +763,9 @@ node* cd(node *currentFolder, char *command, char **path) {
             if (strcmp(folderName, "/") == 0) {
                 *path = realloc(*path, sizeof(char) * 2);
                 strcpy(*path, "/");
+                while (currentFolder->parent != NULL) {
+                    currentFolder = currentFolder->parent; // Navigate up to the actual root
+                }
                 return currentFolder; // Assuming currentFolder is root when "cd /" is called
             }
 
